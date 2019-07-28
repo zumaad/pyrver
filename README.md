@@ -10,4 +10,4 @@ Because I don't want to simply return an "ok" http response everytime a client m
 
 3. make my own web framework and have my web server communicate with it through a specification/interface I made (not WSGI)
 
-Things that I want to work on that don't have to do with returning http responses are: being able to accept multiple connections at the same time, be able to serve contents at a really high rate, maybe using multi threading or asyncio :)
+Things that I want to work on that don't have to do with returning http responses are: being able to accept multiple connections at the same time, be able to serve contents at a really high rate, maybe using multi threading or asyncio :).
