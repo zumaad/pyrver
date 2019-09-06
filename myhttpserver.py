@@ -1,8 +1,7 @@
-
 import socket
 import time
 import argparse
-
+from time import sleep
 
 def http_parser(http_message):
     # print(http_message.split('\n'))
@@ -35,33 +34,29 @@ with open('home.html','rb') as home_page:
 HOST = '0.0.0.0'  # Standard loopback interface address (localhost)
 PORT = int(args.port)   # Port to listen on (non-privileged ports are > 1023)
 
-with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-    s.bind((HOST, PORT))
-    s.listen()
-    conn, addr = s.accept()
-    with conn:
-        print('Connected by', addr)
-        while True:
-            http_message = conn.recv(1024)
-            
-                
-            if b'GET' in http_message:
-                print(http_message.decode())
-                http_response = create_http_response(home_page_html) 
-                
-                conn.sendall(http_response)
-            elif b'POST' in http_message:
-                print(http_message.decode())
-                print(conn.recv(100))
-                print("past last recv")
+listening_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+listening_socket.bind((HOST, PORT))
+listening_socket.listen()
+print("listening")
+client_socket, addr = listening_socket.accept()
+print('accepted client')
+sleep(5)
+while True:
+    http_message = client_socket.recv(1024)
+    print(http_message)
+    if b'GET' in http_message:
+        print(http_message.decode())
+        http_response = create_http_response(home_page_html) 
+        
+        client_socket.sendall(http_response)
+    elif b'POST' in http_message:
+        print(http_message.decode())
+        print(client_socket.recv(100))
+        print("past last recv")
 
-                http_response = create_http_response(None) 
-                conn.sendall(http_response)
-            elif not http_message:
-                print(http_message)
-                print("client closing connection")
-                break
-            
-
-
-            
+        http_response = create_http_response(None) 
+        client_socket.sendall(http_response)
+    elif not http_message:
+        print(http_message)
+        print("client closing connection")
+        break
