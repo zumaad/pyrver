@@ -32,8 +32,6 @@ PORT = int(args.port)
 
 client_manager = selectors.DefaultSelector()
 list_of_sockets = []
-
-byte_count = 0
     
 class SocketType(Enum):
     MASTER_SOCKET = 1
@@ -64,15 +62,15 @@ class HttpBaseHandler:
         self.parsed_http_request = HttpRequest(method, requested_url, headers, payload)
 
     def handle_request(self, raw_http_request: bytes) -> bytes:
-        return self.create_http_response('Default http response if behaviour is not overrriden in child class :)')
+        return self.create_http_response(b'Default http response if behaviour is not overrriden in child class :)')
 
-    def create_http_response(self, str_body: str= '') -> bytes:
-        bytes_body = str_body.encode()
-        length = len(bytes_body) if bytes_body else 0
+    def create_http_response(self, raw_body: bytes= b'') -> bytes:
+        
+        length = len(raw_body) if raw_body else 0
         headers = (f'HTTP/1.1 200 OK\n'
                 f'Content-Type: text/html; charset=UTF-8\n'   
                 f'Content-Length: {length}\n\n').encode()
-        http_response = headers + bytes_body if bytes_body else headers
+        http_response = headers + raw_body if raw_body else headers
         return http_response
 
 class StaticAssetHandler(HttpBaseHandler):
@@ -84,20 +82,17 @@ class StaticAssetHandler(HttpBaseHandler):
         """ path_to_static_file is can be either just a filename or a path to a file in case
             the requested asset is nested  
         """
-        global byte_count
-        byte_count += len(raw_http_request)
-        print(byte_count)
+    
         self.parse_http_request(raw_http_request)
-        # print(self.parsed_http_request)
-
-        return self.create_http_response('requested was received and parsed :)')
-        # absolute_path = self.static_directory_path + path_to_static_file
+        absolute_path = self.static_directory_path + self.parsed_http_request.requested_url[1:]
+        print(absolute_path)
         
-        # if pathlib.Path(absolute_path) in self.all_files:
-        #     static_file_contents = open(absolute_path,'rb').read()
-        #     return static_file_contents
-        # else:
-        #     return b'file does not exist'
+        # print(self.parsed_http_request)
+        if pathlib.Path(absolute_path) in self.all_files:
+            static_file_contents = open(absolute_path,'rb').read()
+            return self.create_http_response(static_file_contents)
+        else:
+            return self.create_http_response(b'file not found :(')
 
 
 class ManageHandlers:
@@ -138,7 +133,7 @@ def log_debug_info(*args: Any, stdout_print:bool = False) -> None:
 
 def accept_new_client(master_socket) -> None:
     new_client_socket, addr = master_socket.accept()
-    new_client_socket.setblocking(False)
+    # new_client_socket.setblocking(False)
     client_manager.register(new_client_socket, selectors.EVENT_READ | selectors.EVENT_WRITE, data = ClientInformation(addr,SocketType.CLIENT_SOCKET))
     list_of_sockets.append(new_client_socket)
 
@@ -160,6 +155,7 @@ def handle_client(socket_wrapper, events, handlers: List[HttpBaseHandler]) -> No
         if not recv_data:
             close_client_connection(socket_wrapper)
         else:
+            print("in sending messages part")
             for handler in handlers:
                 response = handler.handle_request(recv_data)
                 client_socket.sendall(response)
@@ -175,7 +171,7 @@ def init_master_socket() -> None:
     master_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     master_socket.bind((HOST, PORT))
     master_socket.listen()
-    master_socket.setblocking(False)
+    # master_socket.setblocking(False)
     client_manager.register(master_socket, selectors.EVENT_READ, data=ClientInformation(None,SocketType.MASTER_SOCKET))
 
 def server_loop(handlers: List[HttpBaseHandler]) -> None:
