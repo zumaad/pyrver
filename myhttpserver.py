@@ -133,7 +133,7 @@ def log_debug_info(*args: Any, stdout_print:bool = False) -> None:
 
 def accept_new_client(master_socket) -> None:
     new_client_socket, addr = master_socket.accept()
-    # new_client_socket.setblocking(False)
+    new_client_socket.setblocking(False)
     client_manager.register(new_client_socket, selectors.EVENT_READ | selectors.EVENT_WRITE, data = ClientInformation(addr,SocketType.CLIENT_SOCKET))
     list_of_sockets.append(new_client_socket)
 
@@ -158,7 +158,22 @@ def handle_client(socket_wrapper, events, handlers: List[HttpBaseHandler]) -> No
             print("in sending messages part")
             for handler in handlers:
                 response = handler.handle_request(recv_data)
-                client_socket.sendall(response)
+                send_all(client_socket,response)
+
+def send_all(client_socket, response: bytes):
+    """ I can't just use the sendall method on the socket object because it throws an error when it can't send
+        all the bytes for whatever reason (typically other socket isn't ready for reading i guess) and you can't just catch
+        the error and try again because you have no clue how many bytes were actually written. However, using the send
+        method gives you much finer control as it returns how many bytes were written, so if all the bytes couldn't be written
+        you can truncate your message accordingly and repeat.  """
+    BUFFER_SIZE = 1024 #is this optimal, i have no clue :), should research what a good buffer size is.
+    while response:
+        bytes_sent = client_socket.send(response[:BUFFER_SIZE])
+        if bytes_sent < BUFFER_SIZE:
+            response = response[bytes_sent:]
+        else:
+            response = response[BUFFER_SIZE:]
+
 
 def close_client_connection(socket_wrapper) -> None:
     log_debug_info('closing connection', socket_wrapper.data.addr,stdout_print=True)
@@ -171,7 +186,7 @@ def init_master_socket() -> None:
     master_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     master_socket.bind((HOST, PORT))
     master_socket.listen()
-    # master_socket.setblocking(False)
+    master_socket.setblocking(False)
     client_manager.register(master_socket, selectors.EVENT_READ, data=ClientInformation(None,SocketType.MASTER_SOCKET))
 
 def server_loop(handlers: List[HttpBaseHandler]) -> None:
