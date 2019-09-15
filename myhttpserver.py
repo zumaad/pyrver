@@ -174,7 +174,6 @@ def send_all(client_socket, response: bytes):
         else:
             response = response[BUFFER_SIZE:]
 
-
 def close_client_connection(socket_wrapper) -> None:
     log_debug_info('closing connection', socket_wrapper.data.addr,stdout_print=True)
     client_socket = socket_wrapper.fileobj

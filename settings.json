@@ -1,4 +1,8 @@
 {
-    "tasks":
-        {"static_root":"/Users/zumaad/httpserver/static/"}
+    "tasks":{
+        "serveStatic":{
+                "staticRoot":"/Users/zumaad/httpserver/static/",
+                "requestsShouldStartWith":["/static/","/whatever/"]
+            } 
+    }    
 }
