@@ -1,7 +1,7 @@
 
 from utils import HttpRequest
 import pathlib
-from typing import Any, List, Dict
+from typing import Any, List, Dict, Union
 
 class HttpBaseHandler:
 
@@ -29,20 +29,39 @@ class StaticAssetHandler(HttpBaseHandler):
         self.static_directory_path = context['staticRoot']
         self.request_should_start_with: List[str] = context['requestsShouldStartWith']
         self.all_files = set(pathlib.Path(self.static_directory_path).glob('**/*')) #get all files in the static directory
+    
+    def remove_url_prefix(self):
+        for url_part in self.request_should_start_with:
+            if self.parsed_http_request.requested_url.startswith(url_part):
+                return self.parsed_http_request.requested_url[len(url_part):]
+        
 
     def handle_request(self, raw_http_request: bytes) -> bytes:
         self.parse_http_request(raw_http_request)
 
-        absolute_path = self.static_directory_path + self.parsed_http_request.requested_url[1:] #removing beginning '/'
+        
         request_matches_pattern = self.parsed_http_request.requested_url.startswith(tuple(self.request_should_start_with))
+        absolute_path = self.static_directory_path + self.remove_url_prefix() 
+        
         print(absolute_path)
         
         if pathlib.Path(absolute_path) in self.all_files and request_matches_pattern:
             static_file_contents = open(absolute_path,'rb').read()
             return self.create_http_response(static_file_contents)
         else:
-            return self.create_http_response(b'file not found :(')
-
+            error_messages = []
+            if not request_matches_pattern:
+                error_messages.append(f'you requested for {self.parsed_http_request.requested_url} which does not'
+                                      f'start with any of the following {self.request_should_start_with} as set in your settings file')
+            if not pathlib.Path(absolute_path) in self.all_files:
+                error_messages.append(f'the file requested was searched for in {absolute_path} and it does not exist.'
+                     f'A proper request for a static resource is any of the strings the request should start with (as defined'
+                     f'in your settings.json file) + relative path to your resource starting from the static_root (defined in' 
+                     f'settings.json).')
+            full_error_message = '\n'.join(error_messages)
+            return self.create_http_response(f'<pre> {full_error_message}</pre>'.encode())
+            
+            
 class ManageHandlers:
     """
     picks the handler based on settings and injects the needed context for each handler
