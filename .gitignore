@@ -1,2 +1,3 @@
 .mypy_cache/*
 server.log
+__pycache__/*
