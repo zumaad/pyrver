@@ -30,21 +30,33 @@ class StaticAssetHandler(HttpBaseHandler):
         self.static_directory_path = context['staticRoot']
         self.request_should_start_with: List[str] = context['requestsShouldStartWith']
         self.all_files = set(pathlib.Path(self.static_directory_path).glob('**/*')) #get all files in the static directory
+
+
     
-    def remove_url_prefix(self):
+    def remove_url_prefix(self) -> str:
         for url_part in self.request_should_start_with:
             if self.parsed_http_request.requested_url.startswith(url_part):
                 return self.parsed_http_request.requested_url[len(url_part):]
-        
+    
+    def match_error_response(self) -> str:
+        return (f'<pre> you requested for {self.parsed_http_request.requested_url} which does not\n'
+                f'start with any of the following {self.request_should_start_with} as set in your settings file. If this\n'
+                f'does not match the pattern for static asset requests because it is NOT a static asset request,\n'
+                f' you should specify a server to forward non-static-asset requests to in settings.json</pre\n')
+
+    def not_found_error_response(self, absolute_path: str) -> str:
+        return (f'<pre> the file requested was searched for in {absolute_path} and it does not exist.\n'
+                f'A proper request for a static resource is any of the strings the request should start with (as defined\n'
+                f'in your settings.json file) + the relative path to your resource starting from the static_root (defined in\n' 
+                f'settings.json). </pre>')
+
     def handle_request(self, raw_http_request: bytes) -> bytes:
         self.parse_http_request(raw_http_request)
+        print(self.parsed_http_request)
 
         request_matches_pattern = self.parsed_http_request.requested_url.startswith(tuple(self.request_should_start_with))
         if not request_matches_pattern:
-            return self.create_http_response(f'<pre> you requested for {self.parsed_http_request.requested_url} which does not\n'
-                                            f'start with any of the following {self.request_should_start_with} as set in your settings file. If this\n'
-                                            f'does not match the pattern for static asset requests because it is NOT a static asset request,\n'
-                                            f' you should specify a server to forward non-static-asset requests to in settings.json</pre\n')
+            return self.create_http_response(self.match_error_response())
 
         absolute_path = self.static_directory_path + self.remove_url_prefix() 
         
@@ -52,11 +64,7 @@ class StaticAssetHandler(HttpBaseHandler):
             static_file_contents = open(absolute_path,'rb').read()
             return self.create_http_response(static_file_contents)
         else:
-            return self.create_http_response(
-                f'<pre> the file requested was searched for in {absolute_path} and it does not exist.\n'
-                f'A proper request for a static resource is any of the strings the request should start with (as defined\n'
-                f'in your settings.json file) + the relative path to your resource starting from the static_root (defined in\n' 
-                f'settings.json). </pre>')
+            return self.create_http_response(self.not_found_error_response(absolute_path))
                 
 class ManageHandlers:
     """

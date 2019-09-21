@@ -26,12 +26,13 @@ def accept_new_client(master_socket) -> None:
     client_manager.register(new_client_socket, selectors.EVENT_READ | selectors.EVENT_WRITE, data = ClientInformation(addr,SocketType.CLIENT_SOCKET))
     list_of_sockets.append(new_client_socket)
 
-def handle_client(socket_wrapper, events, handlers: List[HttpBaseHandler]) -> None:
+def handle_client_request(socket_wrapper, events, handlers: List[HttpBaseHandler]) -> None:
     recv_data = None 
     client_socket = socket_wrapper.fileobj
     if events & selectors.EVENT_READ:
         try:
             recv_data = client_socket.recv(1024)
+            print(recv_data)
         except (ConnectionResetError, TimeoutError) as e: 
             handle_exceptions(e, socket_wrapper)
             
@@ -71,14 +72,24 @@ def init_master_socket() -> None:
     master_socket.setblocking(False)
     client_manager.register(master_socket, selectors.EVENT_READ, data=ClientInformation(None,SocketType.MASTER_SOCKET))
 
+# currently gets an http request and passes it to all the relevant handlers. Relevant handlers are the ones that could
+# be relevant given the tasks in the settings file. But, the problem is that just because it is a relevant handler
+# doesn't mean it can handle that particular request. For example, lets say you have two tasks, serving static and acting as a reverse
+# proxy. The reverse proxy handler and static handler are relevant handlers, so every request is passed to both of them. But, these tasks 
+# have matching criteria like only serve static if the requested url begins with /images/ or if the request is for the host "gooby.com". Thus, by 
+# passing the request to every handler, you are doing the same work over and over, which is making the handler decide
+# whether the request matches its criteria. Its not horrible, but i wonder if having something outside make the decision of what handler to send the request
+# to is better. Maybe this thing could have access to some mapping of criteria to handlers and only pass the request to the handler if the criteria matches. 
+ 
 def server_loop(handlers: List[HttpBaseHandler]) -> None:
+    print("server loop")
     while True:
         ready_sockets = client_manager.select()
         for socket_wrapper, events in ready_sockets:
             if socket_wrapper.data.socket_type == SocketType.MASTER_SOCKET:
                 accept_new_client(socket_wrapper.fileobj)
             elif socket_wrapper.data.socket_type == SocketType.CLIENT_SOCKET:
-                handle_client(socket_wrapper, events, handlers)
+                handle_client_request(socket_wrapper, events, handlers) 
 
 def main() -> None:
     settings = settings_parser()
@@ -88,3 +99,14 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+
+"""
+because there are cases where one handler is picked over the other i feel like its wasteful to pass the request to each of the handlers and make them
+parse it and then figure out what they should do and this doesn't work if several handlers reject the request for whatever reasons (am i gonna return multiple
+error responses?).I think a better architecture would be to have some sort of mapping that maps patterns of requests to handler so that i dont have to pass
+the request to each handler and have them decide whether or not they are responsible for processing the request.
+
+what about conflicts like load balance when you see x, and serve static when u see x?
+"""    
