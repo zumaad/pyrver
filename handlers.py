@@ -1,18 +1,25 @@
 
 from utils import HttpRequest
 import pathlib
-from typing import Any, List, Dict, Union
+from typing import Any, List, Dict, Union, Sequence
 
 class HttpBaseHandler:
 
-    def parse_http_request(self, raw_http_request: bytes) -> None:
-        http_request_lines = raw_http_request.decode().split('\r\n')
-        method,requested_url = http_request_lines[0].split()[:2] #the first two words on the first line of the request
-        headers = {header.split(': ')[0]:header.split(': ')[1] for header in http_request_lines[1:-2]}
-        payload = http_request_lines[-1]
-        self.parsed_http_request = HttpRequest(method, requested_url, headers, payload)
+    def should_handle(self, http_request: HttpRequest) -> bool:
+        for target_http_request_attribute, required_attribute_values in self.http_request_match_criteria.items():
+            actual_request_attribute_value = http_request[target_http_request_attribute]
+            
+            if target_http_request_attribute == 'url':
+                if not actual_request_attribute_value.startswith(tuple(required_attribute_values)):
+                    return False
+            else:
+                if actual_request_attribute_value not in required_attribute_values:
+                    return False
+    
+        self.http_request = http_request
+        return True
 
-    def handle_request(self, raw_http_request: bytes) -> bytes:
+    def handle_request(self) -> bytes:
         return self.create_http_response('Default http response if behaviour is not overrriden in child class :)')
 
     def create_http_response(self, body: Union[str,bytes] = '') -> bytes:
@@ -25,39 +32,25 @@ class HttpBaseHandler:
         return http_response
 
 class StaticAssetHandler(HttpBaseHandler):
-    def __init__(self, context: Dict[Any,Any]):
-        self.full_context = context
+    def __init__(self, match_criteria: Dict[str, List], context: Dict[str, str]):
+        self.http_request_match_criteria = match_criteria
         self.static_directory_path = context['staticRoot']
-        self.request_should_start_with: List[str] = context['requestsShouldStartWith']
         self.all_files = set(pathlib.Path(self.static_directory_path).glob('**/*')) #get all files in the static directory
 
-
-    
-    def remove_url_prefix(self) -> str:
-        for url_part in self.request_should_start_with:
-            if self.parsed_http_request.requested_url.startswith(url_part):
-                return self.parsed_http_request.requested_url[len(url_part):]
-    
-    def match_error_response(self) -> str:
-        return (f'<pre> you requested for {self.parsed_http_request.requested_url} which does not\n'
-                f'start with any of the following {self.request_should_start_with} as set in your settings file. If this\n'
-                f'does not match the pattern for static asset requests because it is NOT a static asset request,\n'
-                f' you should specify a server to forward non-static-asset requests to in settings.json</pre\n')
-
+  
     def not_found_error_response(self, absolute_path: str) -> str:
         return (f'<pre> the file requested was searched for in {absolute_path} and it does not exist.\n'
                 f'A proper request for a static resource is any of the strings the request should start with (as defined\n'
                 f'in your settings.json file) + the relative path to your resource starting from the static_root (defined in\n' 
                 f'settings.json). </pre>')
 
-    def handle_request(self, raw_http_request: bytes) -> bytes:
-        self.parse_http_request(raw_http_request)
-        print(self.parsed_http_request)
-
-        request_matches_pattern = self.parsed_http_request.requested_url.startswith(tuple(self.request_should_start_with))
-        if not request_matches_pattern:
-            return self.create_http_response(self.match_error_response())
-
+    def remove_url_prefix(self) -> str:
+        for required_beginning in self.http_request_match_criteria['url']:
+            if self.http_request.requested_url.startswith(required_beginning):
+                return self.http_request.requested_url[len(required_beginning):]
+        
+   
+    def handle_request(self) -> bytes:
         absolute_path = self.static_directory_path + self.remove_url_prefix() 
         
         if pathlib.Path(absolute_path) in self.all_files:
@@ -65,22 +58,25 @@ class StaticAssetHandler(HttpBaseHandler):
             return self.create_http_response(static_file_contents)
         else:
             return self.create_http_response(self.not_found_error_response(absolute_path))
-                
+
 class ManageHandlers:
     """
     picks the handler based on settings and injects the needed context for each handler
     """
 
-    def __init__(self, tasks_and_context: Dict):
-        self.tasks_and_context = tasks_and_context
-        self.task_to_handler = {'serveStatic':StaticAssetHandler}
-
+    def __init__(self, settings: Dict):
+        self.tasks = settings['tasks']
+        print(self.tasks)
+        self.implemented_handlers = {'serveStatic':StaticAssetHandler}
+    
     def pick_handlers(self) -> List[HttpBaseHandler]:
         task_handlers: List[HttpBaseHandler] = []
-        for task, context in self.tasks_and_context.items():
-            if task in self.task_to_handler:
-                handlerClass = self.task_to_handler[task]
-                task_handlers.append(handlerClass(context))
+        for task_name, task_info in self.tasks.items():
+            match_criteria = task_info['matchCriteria']
+            needed_context = task_info['context']
+            if task_name in self.implemented_handlers:
+                handlerClass = self.implemented_handlers[task_name]
+                task_handlers.append(handlerClass(match_criteria, needed_context))
             else:
                 raise NotImplementedError
         return task_handlers

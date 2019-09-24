@@ -1,20 +1,8 @@
 {
     "tasks":{
         "serveStatic":{
-                "requestsShouldStartWith":["/static/","/whatever/","/assets/","/images/"],
-                "staticRoot":"/Users/zumaad/httpserver/static/"
-            } 
-
-    }    
-}
-
-
-{
-    "tasks":[
-        {
-        "matchCriteria":
-            {"listenOn":80, "matchHost":"gooby.com", "matchUrl":["/images/"]},
-        "action":"serveStatic",
-        "context":{"staticRoot":"/Users/zumaad/httpserver/static/"}}
-    ]}    
+            "matchCriteria": {"port":["3333"], "host": ["testingserver.com"], "url":["/static/"]},
+            "context": {"staticRoot":"/Users/zumaad/httpserver/static/"}
+        }
+    }  
 }
