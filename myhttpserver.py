@@ -1,7 +1,7 @@
 import socket
 import argparse
 import selectors
-from utils import ClientInformation, handle_exceptions, log_debug_info, SocketType, settings_parser, parse_http_request
+from utils import ClientInformation, handle_exceptions, log_debug_info, SocketType, settings_parser, parse_http_request, HttpResponse
 from typing import Dict, Tuple, Union, Any, List, Callable
 import logging
 from handlers import ManageHandlers,HttpBaseHandler
@@ -44,8 +44,11 @@ def handle_client_request(socket_wrapper, events, handlers: List[HttpBaseHandler
                 if handler.should_handle(http_request):
                     http_response = handler.handle_request()
                     send_all(client_socket,http_response)
-                    break
+                    return
+            http_error_response = HttpResponse(400, 'No handler could handle your request, check the matching criteria in settings.json').dump()
+            send_all(client_socket, http_error_response)
 
+            
 def send_all(client_socket, response: bytes):
     """ I can't just use the sendall method on the socket object because it throws an error when it can't send
         all the bytes for whatever reason (typically other socket isn't ready for reading i guess) and you can't just catch

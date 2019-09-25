@@ -1,5 +1,5 @@
 
-from utils import HttpRequest
+from utils import HttpRequest, HttpResponse
 import pathlib
 from typing import Any, List, Dict, Union, Sequence
 
@@ -20,16 +20,17 @@ class HttpBaseHandler:
         return True
 
     def handle_request(self) -> bytes:
-        return self.create_http_response('Default http response if behaviour is not overrriden in child class :)')
+        return HttpResponse(body='Default http response if behaviour is not overrriden in child class :)').dump()
 
     def create_http_response(self, body: Union[str,bytes] = '') -> bytes:
         body = body.encode() if isinstance(body,str) else body
         length = len(body) if body else 0
-        headers = (f'HTTP/1.1 200 OK\n'
+        headers = (f'HTTP/1.1 200\n'
                 f'Content-Type: text/html; charset=UTF-8\n'   
                 f'Content-Length: {length}\n\n').encode()
         http_response = headers + body if body else headers
         return http_response
+    
 
 class StaticAssetHandler(HttpBaseHandler):
     def __init__(self, match_criteria: Dict[str, List], context: Dict[str, str]):
@@ -55,9 +56,9 @@ class StaticAssetHandler(HttpBaseHandler):
         
         if pathlib.Path(absolute_path) in self.all_files:
             static_file_contents = open(absolute_path,'rb').read()
-            return self.create_http_response(static_file_contents)
+            return HttpResponse(body=static_file_contents).dump()
         else:
-            return self.create_http_response(self.not_found_error_response(absolute_path))
+            return HttpResponse(response_code=400, body=self.not_found_error_response(absolute_path)).dump()
 
 class ManageHandlers:
     """
