@@ -1,8 +1,0 @@
-{
-    "tasks":{
-        "serveStatic":{
-            "matchCriteria": {"port":["3333"], "host": ["testingserver.com"], "url":["/static/"]},
-            "context": {"staticRoot":"/Users/zumaad/httpserver/static/"}
-        }
-    }  
-}

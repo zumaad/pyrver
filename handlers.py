@@ -6,10 +6,14 @@ from typing import Any, List, Dict, Union, Sequence
 class HttpBaseHandler:
 
     def should_handle(self, http_request: HttpRequest) -> bool:
+        """ Determines whether the handler for a certain task (like serving static files) should handle
+            the given request. For example in your settings.json file you """
         for target_http_request_attribute, required_attribute_values in self.http_request_match_criteria.items():
             actual_request_attribute_value = http_request[target_http_request_attribute]
             
             if target_http_request_attribute == 'url':
+                #url matching is different because you are not checking for the simple existance of the
+                #request value in the required values.
                 if not actual_request_attribute_value.startswith(tuple(required_attribute_values)):
                     return False
             else:
@@ -22,15 +26,6 @@ class HttpBaseHandler:
     def handle_request(self) -> bytes:
         return HttpResponse(body='Default http response if behaviour is not overrriden in child class :)').dump()
 
-    def create_http_response(self, body: Union[str,bytes] = '') -> bytes:
-        body = body.encode() if isinstance(body,str) else body
-        length = len(body) if body else 0
-        headers = (f'HTTP/1.1 200\n'
-                f'Content-Type: text/html; charset=UTF-8\n'   
-                f'Content-Length: {length}\n\n').encode()
-        http_response = headers + body if body else headers
-        return http_response
-    
 
 class StaticAssetHandler(HttpBaseHandler):
     def __init__(self, match_criteria: Dict[str, List], context: Dict[str, str]):
@@ -43,14 +38,13 @@ class StaticAssetHandler(HttpBaseHandler):
         return (f'<pre> the file requested was searched for in {absolute_path} and it does not exist.\n'
                 f'A proper request for a static resource is any of the strings the request should start with (as defined\n'
                 f'in your settings.json file) + the relative path to your resource starting from the static_root (defined in\n' 
-                f'settings.json). </pre>')
+                f'settings.py). </pre>')
 
     def remove_url_prefix(self) -> str:
         for required_beginning in self.http_request_match_criteria['url']:
             if self.http_request.requested_url.startswith(required_beginning):
                 return self.http_request.requested_url[len(required_beginning):]
         
-   
     def handle_request(self) -> bytes:
         absolute_path = self.static_directory_path + self.remove_url_prefix() 
         

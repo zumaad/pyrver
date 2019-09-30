@@ -5,6 +5,7 @@ from utils import ClientInformation, handle_exceptions, log_debug_info, SocketTy
 from typing import Dict, Tuple, Union, Any, List, Callable
 import logging
 from handlers import ManageHandlers,HttpBaseHandler
+from settings import settings
 
 
 logging.basicConfig(filename='server.log',
@@ -53,7 +54,7 @@ class Server:
                         self.send_all(client_socket,http_response)
                         return
 
-                http_error_response = HttpResponse(400, 'No handler could handle your request, check the matching criteria in settings.json').dump()
+                http_error_response = HttpResponse(400, 'No handler could handle your request, check the matching criteria in settings.py').dump()
                 self.update_statistics(bytes_sent=len(http_error_response))
                 self.send_all(client_socket, http_error_response)
 
@@ -108,7 +109,6 @@ class Server:
         print(self.statistics)
     
 def main() -> None:
-    settings = settings_parser()
     relevant_task_handlers = ManageHandlers(settings).pick_handlers()
     server = Server(relevant_task_handlers, port=PORT)
     try:

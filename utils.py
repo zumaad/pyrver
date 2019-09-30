@@ -25,7 +25,10 @@ class HttpRequest:
 
         self.request_type = request_type 
         self.requested_url = requested_url
-        self.host,self.port = headers['Host'].split(':')  #host is something like gooby.com:3333
+        self.port = ''
+        self.host = ''
+        if 'Host' in headers:
+            self.host,self.port = headers['Host'].split(':') #host is something like gooby.com:3333
         self.headers = headers
         self.payload = payload
 
