@@ -2,6 +2,7 @@
 from utils import HttpRequest, HttpResponse
 import pathlib
 from typing import Any, List, Dict, Union, Sequence
+import socket
 
 class HttpBaseHandler:
     def __init__(self, match_criteria: Dict[str, List], context: Dict[str, str]):
@@ -60,6 +61,22 @@ class StaticAssetHandler(HttpBaseHandler):
 class ReverseProxyHandler(HttpBaseHandler):
     def __init__(self, match_criteria: Dict[str, List], context: Dict[str, str]):
         super().__init__(match_criteria, context)
+        self.server_to_send_to = context['send_to']
+
+    
+    def handle_request(self) -> bytes:
+        #open a socket send the message, wait for a response (maybe have multi threading in this scenario)
+        pass
+
+class LoadBalancingHandler(HttpBaseHandler):
+    def __init__(self, match_criteria: Dict[str, List], context: Dict[str, Any]):
+        super().__init__(match_criteria, context)
+    
+    def handle_request(self) -> bytes:
+        pass
+
+
+
 
 class ManageHandlers:
     """
@@ -70,13 +87,14 @@ class ManageHandlers:
         self.tasks = settings['tasks']
         print(self.tasks)
         self.implemented_handlers = {
-            'serveStatic':StaticAssetHandler,
-            'reverseProxy':ReverseProxyHandler}
+            'serve_static':StaticAssetHandler,
+            'reverse_proxy':ReverseProxyHandler,
+            'load_balance':LoadBalancingHandler}
     
     def pick_handlers(self) -> List[HttpBaseHandler]:
         task_handlers: List[HttpBaseHandler] = []
         for task_name, task_info in self.tasks.items():
-            match_criteria = task_info['matchCriteria']
+            match_criteria = task_info['match_criteria']
             needed_context = task_info['context']
             if task_name in self.implemented_handlers:
                 handler_class = self.implemented_handlers[task_name]

@@ -1,5 +1,6 @@
 settings = {
     "tasks":{
+
         "serve_static":{
             "match_criteria": {
                 "port":[str(port_num) for port_num in range(3330,3335)], 
@@ -8,11 +9,12 @@ settings = {
                               },
             "context": {"staticRoot":"/Users/zumaad/httpserver/static/"}
         },
-        "proxy": {
+
+        "reverse_proxy": {
             "match_criteria": {
                 "host":["testingserver2.com"]
                 },
-            "context": {'send_to':['localhost:4000']}
+            "context": {'send_to':'localhost:4000'}
         }
     }  
 }

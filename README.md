@@ -8,7 +8,7 @@ Because I don't want to simply return an "ok" http response everytime a client m
 ___
 on settings.json
 "tasks":{
-        "serveStatic":{
+        "serve_static":{
                 "staticRoot":"/Users/zumaad/httpserver/static/",
                 "requestsShouldStartWith":["/static/","/whatever/","/assets/"]
             } 
