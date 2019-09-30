@@ -4,6 +4,9 @@ import pathlib
 from typing import Any, List, Dict, Union, Sequence
 
 class HttpBaseHandler:
+    def __init__(self, match_criteria: Dict[str, List], context: Dict[str, str]):
+        self.http_request_match_criteria = match_criteria
+        self.context = context
 
     def should_handle(self, http_request: HttpRequest) -> bool:
         """ Determines whether the handler for a certain task (like serving static files) should handle
@@ -29,7 +32,7 @@ class HttpBaseHandler:
 
 class StaticAssetHandler(HttpBaseHandler):
     def __init__(self, match_criteria: Dict[str, List], context: Dict[str, str]):
-        self.http_request_match_criteria = match_criteria
+        super().__init__(match_criteria, context)
         self.static_directory_path = context['staticRoot']
         self.all_files = set(pathlib.Path(self.static_directory_path).glob('**/*')) #get all files in the static directory
 
@@ -54,15 +57,21 @@ class StaticAssetHandler(HttpBaseHandler):
         else:
             return HttpResponse(response_code=400, body=self.not_found_error_response(absolute_path)).dump()
 
+class ReverseProxyHandler(HttpBaseHandler):
+    def __init__(self, match_criteria: Dict[str, List], context: Dict[str, str]):
+        super().__init__(match_criteria, context)
+
 class ManageHandlers:
     """
-    picks the handler based on settings and injects the needed context for each handler
+    picks the handler based on settings and injects the needed context and the matching criteria for each handler
     """
 
     def __init__(self, settings: Dict):
         self.tasks = settings['tasks']
         print(self.tasks)
-        self.implemented_handlers = {'serveStatic':StaticAssetHandler}
+        self.implemented_handlers = {
+            'serveStatic':StaticAssetHandler,
+            'reverseProxy':ReverseProxyHandler}
     
     def pick_handlers(self) -> List[HttpBaseHandler]:
         task_handlers: List[HttpBaseHandler] = []
@@ -70,8 +79,8 @@ class ManageHandlers:
             match_criteria = task_info['matchCriteria']
             needed_context = task_info['context']
             if task_name in self.implemented_handlers:
-                handlerClass = self.implemented_handlers[task_name]
-                task_handlers.append(handlerClass(match_criteria, needed_context))
+                handler_class = self.implemented_handlers[task_name]
+                task_handlers.append(handler_class(match_criteria, needed_context))
             else:
                 raise NotImplementedError
         return task_handlers
