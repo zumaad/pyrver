@@ -55,7 +55,6 @@ class StaticAssetHandler(HttpBaseHandler):
             '.js':'text/javascript'
         }
 
-  
     def not_found_error_response(self, absolute_path: str) -> str:
         return (f'<pre> the file requested was searched for in {absolute_path} and it does not exist.\n'
                 f'A proper request for a static resource is any of the strings the request should start with (as defined\n'

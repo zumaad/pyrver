@@ -5,7 +5,7 @@ from utils import ClientInformation, handle_exceptions, log_debug_info, SocketTy
 from typing import Dict, Tuple, Union, Any, List, Callable
 import logging
 from handlers import ManageHandlers,HttpBaseHandler
-from settings import settings, settings2
+from settings import settings_map
 
 
 logging.basicConfig(filename='server.log',
@@ -13,9 +13,9 @@ logging.basicConfig(filename='server.log',
                             datefmt='%H:%M:%S',
                             level=logging.DEBUG)
 parser = argparse.ArgumentParser()
-parser.add_argument('port')
+parser.add_argument('--port','-p',type=int)
+parser.add_argument('--settings','-s',type=int)
 args = parser.parse_args()  
-PORT = int(args.port)
 
 class Server:
     def __init__(self, handlers:List[HttpBaseHandler], host = '0.0.0.0', port=9999):
@@ -110,8 +110,8 @@ class Server:
         print(self.statistics)
     
 def main() -> None:
-    relevant_task_handlers = ManageHandlers(settings).pick_handlers()
-    server = Server(relevant_task_handlers, port=PORT)
+    relevant_task_handlers = ManageHandlers(settings_map[args.settings]).pick_handlers()
+    server = Server(relevant_task_handlers, port=args.port)
     try:
         server.start_loop()
     except KeyboardInterrupt:

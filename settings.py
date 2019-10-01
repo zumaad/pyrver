@@ -45,3 +45,8 @@ settings2 = {
         }
     }  
 }
+
+settings_map = {
+    1:settings,
+    2:settings2
+}
