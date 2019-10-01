@@ -5,7 +5,7 @@ from utils import ClientInformation, handle_exceptions, log_debug_info, SocketTy
 from typing import Dict, Tuple, Union, Any, List, Callable
 import logging
 from handlers import ManageHandlers,HttpBaseHandler
-from settings import settings
+from settings import settings, settings2
 
 
 logging.basicConfig(filename='server.log',
@@ -49,6 +49,7 @@ class Server:
                 
                 for handler in self.request_handlers:
                     if handler.should_handle(http_request):
+                        handler.raw_http_request = recv_data
                         http_response = handler.handle_request()
                         self.update_statistics(bytes_recv=len(recv_data), bytes_sent=len(http_response))
                         self.send_all(client_socket,http_response)

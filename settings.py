@@ -4,7 +4,7 @@ settings = {
         "serve_static":{
             "match_criteria": {
                 "port":[str(port_num) for port_num in range(3330,3335)], 
-                "host": ["testingserver.com","localhost","testingserver.com2"], 
+                "host": ["testingserver.com","localhost","testingserver2.com"], 
                 "url":["/static/"]
                               },
             "context": {"staticRoot":"/Users/zumaad/httpserver/static/"}
@@ -22,6 +22,11 @@ settings = {
                 "host":["testingserver2.com"]
                 },
             "context": {'send_to':'localhost:4000',"type":"round_robin"}
+        },
+
+        "health_check": {
+            "match_criteria": {"url":['/health/']},
+            "context":{}
         }
     }  
 }
@@ -30,3 +35,13 @@ settings = {
 #balancing like round robin or weighted. 
 #i could make it such that if you specified multiple servers in reverse_proxy it assumes u want to load balance, but this
 #estabalishes a clearer distinction between the two.
+
+
+settings2 = {
+    "tasks":{
+        "health_check": {
+            "match_criteria": {},
+            "context": {}
+        }
+    }  
+}
