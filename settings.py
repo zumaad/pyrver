@@ -1,3 +1,5 @@
+from typing import Dict
+
 settings = {
     "tasks":{
 
@@ -14,7 +16,7 @@ settings = {
             "match_criteria": {
                 "host":["testingserver2.com"]
                 },
-            "context": {'send_to':'localhost:4000'}
+            "context": {'send_to':'localhost:9000'}
         },
 
         "load_balance": {
@@ -46,7 +48,7 @@ settings2 = {
     }  
 }
 
-settings_map = {
+settings_map: Dict[int,Dict] = {
     1:settings,
     2:settings2
 }

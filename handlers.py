@@ -83,7 +83,7 @@ class ReverseProxyHandler(HttpBaseHandler):
 
     def connect_and_send(self):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as remote_server:
-            remote_server.connect((self.remote_host,self.remote_port))
+            remote_server.connect((self.remote_host,int(self.remote_port)))
             remote_server.sendall(self.raw_http_request)
             data = remote_server.recv(1024)
             print('Received', repr(data))
