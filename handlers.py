@@ -3,6 +3,7 @@ from utils import HttpRequest, HttpResponse
 import pathlib
 from typing import Any, List, Dict, Union, Sequence
 import socket
+import time
 
 class HttpBaseHandler:
     def __init__(self, match_criteria: Dict[str, List], context: Dict[str, str]):
@@ -10,6 +11,7 @@ class HttpBaseHandler:
         self.context = context
         self.http_request: HttpRequest = None
         self.raw_http_request: bytes = None
+        self.threading_based = False
 
     def should_handle(self, http_request: HttpRequest) -> bool:
         """ Determines whether the handler for a certain task (like serving static files) should handle
@@ -36,6 +38,7 @@ class HttpBaseHandler:
 class HealthCheckHandler(HttpBaseHandler):
     def handle_request(self) -> bytes:
         print(self.http_request)
+        time.sleep(10)
         return HttpResponse(body="I'm Healthy!").dump()
 
 class StaticAssetHandler(HttpBaseHandler):
@@ -80,8 +83,9 @@ class ReverseProxyHandler(HttpBaseHandler):
     def __init__(self, match_criteria: Dict[str, List], context: Dict[str, str]):
         super().__init__(match_criteria, context)
         self.remote_host, self.remote_port = context['send_to'].split(':')
+        self.threading_based = True
 
-    def connect_and_send(self):
+    def connect_and_send(self) -> bytes:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as remote_server:
             remote_server.connect((self.remote_host,int(self.remote_port)))
             remote_server.sendall(self.raw_http_request)

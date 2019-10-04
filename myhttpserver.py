@@ -6,6 +6,7 @@ from typing import Dict, Tuple, Union, Any, List, Callable
 import logging
 from handlers import ManageHandlers,HttpBaseHandler
 from settings import settings_map
+import threading
 
 
 logging.basicConfig(filename='server.log',
@@ -30,6 +31,27 @@ class Server:
         new_client_socket.setblocking(False)
         self.client_manager.register(new_client_socket, selectors.EVENT_READ | selectors.EVENT_WRITE, data = ClientInformation(addr,SocketType.CLIENT_SOCKET))
 
+    def on_available_handler(self, client_socket, handler, data_client_sent):
+        """ 
+        This function was made to encapsulate the whole process of getting an http response
+        and sending it to a client so that i could just pass this function as a target of a new thread
+        if i wanted to use a thread based handler (new thread for every request) 
+        """
+        handler.raw_http_request = data_client_sent
+        http_response = handler.handle_request()
+        self.update_statistics(bytes_recv=len(data_client_sent), bytes_sent=len(http_response))
+        self.send_all(client_socket, http_response)
+
+    def on_no_handler(self, client_socket):
+        http_error_response = HttpResponse(400, 'No handler could handle your request, check the matching criteria in settings.py').dump()
+        self.update_statistics(bytes_sent=len(http_error_response))
+        self.send_all(client_socket, http_error_response)
+    
+    def execute_in_new_thread(self, func, args):
+        new_thread = threading.Thread(target = func, args = args)
+        # new_thread.daemon = True
+        new_thread.start()
+
     def handle_client_request(self, socket_wrapper, events) -> None:
         recv_data = None 
         client_socket = socket_wrapper.fileobj
@@ -39,25 +61,24 @@ class Server:
             except (ConnectionResetError, TimeoutError) as e: 
                 handle_exceptions(e, socket_wrapper)
                 
-            if not recv_data:
+            if not recv_data: #clients (such as browsers) will send an empty message to terminate
                 self.close_client_connection(socket_wrapper)
             else:
                 http_request = parse_http_request(recv_data)
-                log_debug_info("received raw data ->",recv_data)
-                log_debug_info("parsed raw data into ->", repr(http_request))
                 self.update_statistics(responses_sent=1, requests_recv=1)
-                
                 for handler in self.request_handlers:
                     if handler.should_handle(http_request):
-                        handler.raw_http_request = recv_data
-                        http_response = handler.handle_request()
-                        self.update_statistics(bytes_recv=len(recv_data), bytes_sent=len(http_response))
-                        self.send_all(client_socket,http_response)
-                        return
-
-                http_error_response = HttpResponse(400, 'No handler could handle your request, check the matching criteria in settings.py').dump()
-                self.update_statistics(bytes_sent=len(http_error_response))
-                self.send_all(client_socket, http_error_response)
+                        if handler.threading_based:
+                            print("yeeeeeeet")
+                            self.execute_in_new_thread(self.on_available_handler, (client_socket, handler, recv_data,))
+                            print("moving on!!!!!")
+                        else:
+                            self.on_available_handler(client_socket, handler, recv_data)
+                        break
+                #if there is no handler able to handle the request. This else clause is only executed if the for loop is finished
+                #without the "break" being executed, which is only when there is no handler able to handle the request.
+                else: 
+                    self.on_no_handler(client_socket)
 
     def update_statistics(self, **statistics) -> None:
         for statistic_name, statistic_value in statistics.items():
