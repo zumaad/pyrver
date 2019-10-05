@@ -31,7 +31,7 @@ class Server:
         new_client_socket.setblocking(False)
         self.client_manager.register(new_client_socket, selectors.EVENT_READ | selectors.EVENT_WRITE, data = ClientInformation(addr,SocketType.CLIENT_SOCKET))
 
-    def on_available_handler(self, client_socket, handler, data_client_sent):
+    def on_compatible_handler(self, client_socket, handler, data_client_sent):
         """ 
         This function was made to encapsulate the whole process of getting an http response
         and sending it to a client so that i could just pass this function as a target of a new thread
@@ -42,7 +42,7 @@ class Server:
         self.update_statistics(bytes_recv=len(data_client_sent), bytes_sent=len(http_response))
         self.send_all(client_socket, http_response)
 
-    def on_no_handler(self, client_socket):
+    def on_no_compatible_handler(self, client_socket):
         http_error_response = HttpResponse(400, 'No handler could handle your request, check the matching criteria in settings.py').dump()
         self.update_statistics(bytes_sent=len(http_error_response))
         self.send_all(client_socket, http_error_response)
@@ -69,16 +69,14 @@ class Server:
                 for handler in self.request_handlers:
                     if handler.should_handle(http_request):
                         if handler.threading_based:
-                            print("yeeeeeeet")
-                            self.execute_in_new_thread(self.on_available_handler, (client_socket, handler, recv_data,))
-                            print("moving on!!!!!")
+                            self.execute_in_new_thread(self.on_compatible_handler, (client_socket, handler, recv_data,))
                         else:
-                            self.on_available_handler(client_socket, handler, recv_data)
+                            self.on_compatible_handler(client_socket, handler, recv_data)
                         break
                 #if there is no handler able to handle the request. This else clause is only executed if the for loop is finished
                 #without the "break" being executed, which is only when there is no handler able to handle the request.
                 else: 
-                    self.on_no_handler(client_socket)
+                    self.on_compatible_handler(client_socket)
 
     def update_statistics(self, **statistics) -> None:
         for statistic_name, statistic_value in statistics.items():
