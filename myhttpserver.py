@@ -76,7 +76,7 @@ class Server:
                 #if there is no handler able to handle the request. This else clause is only executed if the for loop is finished
                 #without the "break" being executed, which is only when there is no handler able to handle the request.
                 else: 
-                    self.on_compatible_handler(client_socket)
+                    self.on_no_compatible_handler(client_socket)
 
     def update_statistics(self, **statistics) -> None:
         for statistic_name, statistic_value in statistics.items():
