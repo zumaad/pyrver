@@ -19,8 +19,8 @@ parser.add_argument('--settings','-s',type=int)
 args = parser.parse_args()  
 
 class Server:
-    def __init__(self, handlers:List[HttpBaseHandler], host = '0.0.0.0', port=9999):
-        self.request_handlers = handlers
+    def __init__(self, settings: Dict, host: str = '0.0.0.0', port: int = 9999):
+        self.request_handlers = ManageHandlers(settings, self.update_statistics).prepare_handlers()
         self.client_manager = selectors.DefaultSelector()
         self.host = host
         self.port = port
@@ -49,7 +49,7 @@ class Server:
     
     def execute_in_new_thread(self, func, args):
         new_thread = threading.Thread(target = func, args = args)
-        # new_thread.daemon = True
+        new_thread.daemon = True
         new_thread.start()
 
     def handle_client_request(self, socket_wrapper, events) -> None:
@@ -61,11 +61,11 @@ class Server:
             except (ConnectionResetError, TimeoutError) as e: 
                 handle_exceptions(e, socket_wrapper)
                 
-            if not recv_data: #clients (such as browsers) will send an empty message to terminate
+            if not recv_data: #clients (such as browsers) will send an empty message when they break the connection.
                 self.close_client_connection(socket_wrapper)
             else:
                 http_request = parse_http_request(recv_data)
-                self.update_statistics(responses_sent=1, requests_recv=1)
+                # self.update_statistics(responses_sent=1, requests_recv=1)
                 for handler in self.request_handlers:
                     if handler.should_handle(http_request):
                         if handler.threading_based:
@@ -80,7 +80,10 @@ class Server:
 
     def update_statistics(self, **statistics) -> None:
         for statistic_name, statistic_value in statistics.items():
-            self.statistics[statistic_name] += statistic_value
+            if statistic_name in self.statistics:
+                self.statistics[statistic_name] += statistic_value
+            else:
+                self.statistics[statistic_name] = statistic_value
 
     def send_all(self, client_socket, response: bytes) -> None:
         """ I can't just use the sendall method on the socket object because it throws an error when it can't send
@@ -129,8 +132,8 @@ class Server:
         print(self.statistics)
     
 def main() -> None:
-    relevant_task_handlers = ManageHandlers(settings_map[args.settings]).pick_handlers()
-    server = Server(relevant_task_handlers, port=args.port)
+    settings = settings_map[args.settings]
+    server = Server(settings)
     try:
         server.start_loop()
     except KeyboardInterrupt:

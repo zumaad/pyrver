@@ -1,16 +1,17 @@
 
 from utils import HttpRequest, HttpResponse
 import pathlib
-from typing import Any, List, Dict, Union, Sequence, Tuple
+from typing import Any, List, Dict, Union, Sequence, Tuple, Callable
 import socket
 import time
 
 class HttpBaseHandler:
-    def __init__(self, match_criteria: Dict[str, List], context: Dict):
+    def __init__(self, match_criteria: Dict[str, List], context: Dict, server_callback: Callable = None):
         self.http_request_match_criteria = match_criteria
         self.context = context
         self.threading_based = False
         self.raw_http_request = b''
+        self.server_callback = server_callback
 
     def should_handle(self, http_request: HttpRequest) -> bool:
         """ Determines whether the handler for a certain task (like serving static files) should handle
@@ -30,9 +31,12 @@ class HttpBaseHandler:
         self.http_request = http_request
         return True
     
+    def use_server_callback(self,**kwargs):
+        if self.server_callback:
+            self.server_callback(**kwargs)
+    
     def handle_request(self) -> bytes:
         return HttpResponse(body='Default http response if behaviour is not overrriden in child class :)').dump()
-
 
 class HealthCheckHandler(HttpBaseHandler):
     def handle_request(self) -> bytes:
@@ -40,8 +44,8 @@ class HealthCheckHandler(HttpBaseHandler):
         return HttpResponse(body="I'm Healthy!").dump()
 
 class StaticAssetHandler(HttpBaseHandler):
-    def __init__(self, match_criteria: Dict[str, List], context: Dict[str, str]):
-        super().__init__(match_criteria, context)
+    def __init__(self, match_criteria: Dict[str, List], context: Dict, server_callback: Callable = None):
+        super().__init__(match_criteria, context, server_callback)
         self.static_directory_path = context['staticRoot']
         self.all_files = set(pathlib.Path(self.static_directory_path).glob('**/*')) #get all files in the static directory
         self.file_extension_mime_type = {
@@ -78,8 +82,8 @@ class StaticAssetHandler(HttpBaseHandler):
             return HttpResponse(response_code=400, body=self.not_found_error_response(absolute_path)).dump()
 
 class ReverseProxyHandler(HttpBaseHandler):
-    def __init__(self, match_criteria: Dict[str, List], context: Dict[str, Any]):
-        super().__init__(match_criteria, context)
+    def __init__(self, match_criteria: Dict[str, List], context: Dict, server_callback: Callable = None):
+        super().__init__(match_criteria, context, server_callback)
         self.remote_host, self.remote_port = context['send_to']
         self.threading_based = True
 
@@ -94,8 +98,8 @@ class ReverseProxyHandler(HttpBaseHandler):
         return self.connect_and_send(self.remote_host, self.remote_port)
         
 class LoadBalancingHandler(ReverseProxyHandler):
-    def __init__(self, match_criteria: Dict[str, List], context: Dict):
-        super().__init__(match_criteria, context)
+    def __init__(self, match_criteria: Dict[str, List], context: Dict, server_callback: Callable = None):
+        super().__init__(match_criteria, context, server_callback)
         self.strategy = self.context['strategy']
         self.remote_servers = self.context['send_to']
         self.server_index = 0
@@ -106,6 +110,7 @@ class LoadBalancingHandler(ReverseProxyHandler):
         return server_to_send_to
 
     def handle_request(self) -> bytes:
+        self.use_server_callback(yeet='hello')
         host, port = self.round_robin()
         return self.connect_and_send(host, port)
 
@@ -114,8 +119,9 @@ class ManageHandlers:
     picks the handler based on settings and injects the needed context and the matching criteria for each handler
     """
 
-    def __init__(self, settings: Dict):
+    def __init__(self, settings: Dict, callback_to_attach: Callable = None):
         self.tasks = settings['tasks']
+        self.callback = callback_to_attach
         print(self.tasks)
         self.implemented_handlers = {
             'serve_static':StaticAssetHandler,
@@ -123,14 +129,14 @@ class ManageHandlers:
             'load_balance':LoadBalancingHandler,
             'health_check':HealthCheckHandler}
     
-    def pick_handlers(self) -> List[HttpBaseHandler]:
+    def prepare_handlers(self) -> List[HttpBaseHandler]:
         task_handlers: List[HttpBaseHandler] = []
         for task_name, task_info in self.tasks.items():
             match_criteria = task_info['match_criteria']
             needed_context = task_info['context']
             if task_name in self.implemented_handlers:
                 handler_class = self.implemented_handlers[task_name]
-                task_handlers.append(handler_class(match_criteria, needed_context))
+                task_handlers.append(handler_class(match_criteria, needed_context, self.callback))
             else:
                 raise NotImplementedError
         return task_handlers
