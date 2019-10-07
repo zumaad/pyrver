@@ -10,6 +10,7 @@ class HttpBaseHandler:
         self.http_request_match_criteria = match_criteria
         self.context = context
         self.threading_based = False
+        self.raw_http_request = b''
 
     def should_handle(self, http_request: HttpRequest) -> bool:
         """ Determines whether the handler for a certain task (like serving static files) should handle
