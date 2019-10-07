@@ -14,16 +14,22 @@ settings = {
 
         "reverse_proxy": {
             "match_criteria": {
-                "host":["testingserver2.com"]
+                "host":["testingserver3.com"]
                 },
-            "context": {'send_to':'localhost:9000'}
+            "context": {
+                'send_to':('localhost',5000)
+                }
         },
 
         "load_balance": {
             "match_criteria": {
                 "host":["testingserver2.com"]
                 },
-            "context": {'send_to':'localhost:4000',"type":"round_robin"}
+            "context": {
+                'send_to':
+                    [('localhost', 4000), ('localhost', 4500)],
+                "strategy":"round_robin"
+                }
         },
 
         "health_check": {

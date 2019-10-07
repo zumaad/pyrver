@@ -1,16 +1,14 @@
 
 from utils import HttpRequest, HttpResponse
 import pathlib
-from typing import Any, List, Dict, Union, Sequence
+from typing import Any, List, Dict, Union, Sequence, Tuple
 import socket
 import time
 
 class HttpBaseHandler:
-    def __init__(self, match_criteria: Dict[str, List], context: Dict[str, str]):
+    def __init__(self, match_criteria: Dict[str, List], context: Dict):
         self.http_request_match_criteria = match_criteria
         self.context = context
-        self.http_request: HttpRequest = None
-        self.raw_http_request: bytes = None
         self.threading_based = False
 
     def should_handle(self, http_request: HttpRequest) -> bool:
@@ -30,7 +28,7 @@ class HttpBaseHandler:
     
         self.http_request = http_request
         return True
-
+    
     def handle_request(self) -> bytes:
         return HttpResponse(body='Default http response if behaviour is not overrriden in child class :)').dump()
 
@@ -38,7 +36,6 @@ class HttpBaseHandler:
 class HealthCheckHandler(HttpBaseHandler):
     def handle_request(self) -> bytes:
         print(self.http_request)
-        time.sleep(10)
         return HttpResponse(body="I'm Healthy!").dump()
 
 class StaticAssetHandler(HttpBaseHandler):
@@ -80,28 +77,36 @@ class StaticAssetHandler(HttpBaseHandler):
             return HttpResponse(response_code=400, body=self.not_found_error_response(absolute_path)).dump()
 
 class ReverseProxyHandler(HttpBaseHandler):
-    def __init__(self, match_criteria: Dict[str, List], context: Dict[str, str]):
+    def __init__(self, match_criteria: Dict[str, List], context: Dict[str, Any]):
         super().__init__(match_criteria, context)
-        self.remote_host, self.remote_port = context['send_to'].split(':')
+        self.remote_host, self.remote_port = context['send_to']
         self.threading_based = True
 
-    def connect_and_send(self) -> bytes:
+    def connect_and_send(self, remote_host: str, remote_port: int) -> bytes:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as remote_server:
-            remote_server.connect((self.remote_host,int(self.remote_port)))
+            remote_server.connect((remote_host,int(remote_port)))
             remote_server.sendall(self.raw_http_request)
             data = remote_server.recv(1024)
-            print('Received', repr(data))
             return data
 
     def handle_request(self) -> bytes:
-        return self.connect_and_send()
+        return self.connect_and_send(self.remote_host, self.remote_port)
         
-class LoadBalancingHandler(HttpBaseHandler):
-    def __init__(self, match_criteria: Dict[str, List], context: Dict[str, Any]):
+class LoadBalancingHandler(ReverseProxyHandler):
+    def __init__(self, match_criteria: Dict[str, List], context: Dict):
         super().__init__(match_criteria, context)
+        self.strategy = self.context['strategy']
+        self.remote_servers = self.context['send_to']
+        self.server_index = 0
     
+    def round_robin(self) -> Tuple[str,int]:
+        server_to_send_to = self.remote_servers[self.server_index % len(self.remote_servers)]
+        self.server_index +=1
+        return server_to_send_to
+
     def handle_request(self) -> bytes:
-        pass
+        host, port = self.round_robin()
+        return self.connect_and_send(host, port)
 
 class ManageHandlers:
     """

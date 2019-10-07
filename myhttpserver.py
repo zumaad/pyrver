@@ -31,7 +31,7 @@ class Server:
         new_client_socket.setblocking(False)
         self.client_manager.register(new_client_socket, selectors.EVENT_READ | selectors.EVENT_WRITE, data = ClientInformation(addr,SocketType.CLIENT_SOCKET))
 
-    def on_compatible_handler(self, client_socket, handler, data_client_sent):
+    def on_compatible_handler(self, client_socket, handler: HttpBaseHandler, data_client_sent: bytes) -> None:
         """ 
         This function was made to encapsulate the whole process of getting an http response
         and sending it to a client so that i could just pass this function as a target of a new thread
@@ -42,7 +42,7 @@ class Server:
         self.update_statistics(bytes_recv=len(data_client_sent), bytes_sent=len(http_response))
         self.send_all(client_socket, http_response)
 
-    def on_no_compatible_handler(self, client_socket):
+    def on_no_compatible_handler(self, client_socket) -> None:
         http_error_response = HttpResponse(400, 'No handler could handle your request, check the matching criteria in settings.py').dump()
         self.update_statistics(bytes_sent=len(http_error_response))
         self.send_all(client_socket, http_error_response)
