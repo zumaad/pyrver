@@ -14,7 +14,7 @@ logging.basicConfig(filename='server.log',
                             datefmt='%H:%M:%S',
                             level=logging.DEBUG)
 parser = argparse.ArgumentParser()
-parser.add_argument('--port','-p',type=int)
+parser.add_argument('--port','-p',type=int, default=9999)
 parser.add_argument('--settings','-s',type=int)
 args = parser.parse_args()  
 
@@ -24,6 +24,7 @@ class Server:
         self.client_manager = selectors.DefaultSelector()
         self.host = host
         self.port = port
+        print(f'listening on port {self.port}')
         self.statistics = {'bytes_sent':0, 'bytes_recv':0, 'requests_recv':0, 'responses_sent':0}
         
     def accept_new_client(self, master_socket) -> None:
@@ -133,7 +134,7 @@ class Server:
     
 def main() -> None:
     settings = settings_map[args.settings]
-    server = Server(settings)
+    server = Server(settings, port = args.port)
     try:
         server.start_loop()
     except KeyboardInterrupt:

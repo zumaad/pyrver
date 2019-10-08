@@ -109,9 +109,9 @@ class LoadBalancingHandler(ReverseProxyHandler):
         return server_to_send_to
 
     def handle_request(self) -> bytes:
-        host, port = self.round_robin()
-        self.use_server_callback(**{host:1})
-        return self.connect_and_send(host, port)    
+        remote_host, remote_port = self.round_robin()
+        self.use_server_callback(**{f'{remote_host}:{remote_port}':1})
+        return self.connect_and_send(remote_host, remote_port)    
 
 class ManageHandlers:
     """
