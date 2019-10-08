@@ -40,7 +40,6 @@ class HttpBaseHandler:
 
 class HealthCheckHandler(HttpBaseHandler):
     def handle_request(self) -> bytes:
-        print(self.http_request)
         return HttpResponse(body="I'm Healthy!").dump()
 
 class StaticAssetHandler(HttpBaseHandler):
@@ -110,9 +109,9 @@ class LoadBalancingHandler(ReverseProxyHandler):
         return server_to_send_to
 
     def handle_request(self) -> bytes:
-        self.use_server_callback(yeet='hello')
         host, port = self.round_robin()
-        return self.connect_and_send(host, port)
+        self.use_server_callback(**{host:1})
+        return self.connect_and_send(host, port)    
 
 class ManageHandlers:
     """
