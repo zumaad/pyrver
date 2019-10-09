@@ -1,16 +1,18 @@
 
-from utils import HttpRequest, HttpResponse
+from utils import HttpRequest, HttpResponse, Range
 import pathlib
-from typing import Any, List, Dict, Union, Sequence, Tuple
+from typing import Any, List, Dict, Union, Sequence, Tuple, Callable
 import socket
 import time
+import random
 
 class HttpBaseHandler:
-    def __init__(self, match_criteria: Dict[str, List], context: Dict):
+    def __init__(self, match_criteria: Dict[str, List], context: Dict, server_callback: Callable = None):
         self.http_request_match_criteria = match_criteria
         self.context = context
         self.threading_based = False
         self.raw_http_request = b''
+        self.server_callback = server_callback
 
     def should_handle(self, http_request: HttpRequest) -> bool:
         """ Determines whether the handler for a certain task (like serving static files) should handle
@@ -30,18 +32,20 @@ class HttpBaseHandler:
         self.http_request = http_request
         return True
     
+    def use_server_callback(self,**kwargs):
+        if self.server_callback:
+            self.server_callback(**kwargs)
+    
     def handle_request(self) -> bytes:
         return HttpResponse(body='Default http response if behaviour is not overrriden in child class :)').dump()
 
-
 class HealthCheckHandler(HttpBaseHandler):
     def handle_request(self) -> bytes:
-        print(self.http_request)
         return HttpResponse(body="I'm Healthy!").dump()
 
 class StaticAssetHandler(HttpBaseHandler):
-    def __init__(self, match_criteria: Dict[str, List], context: Dict[str, str]):
-        super().__init__(match_criteria, context)
+    def __init__(self, match_criteria: Dict[str, List], context: Dict, server_callback: Callable = None):
+        super().__init__(match_criteria, context, server_callback)
         self.static_directory_path = context['staticRoot']
         self.all_files = set(pathlib.Path(self.static_directory_path).glob('**/*')) #get all files in the static directory
         self.file_extension_mime_type = {
@@ -66,6 +70,7 @@ class StaticAssetHandler(HttpBaseHandler):
         for required_beginning in self.http_request_match_criteria['url']:
             if self.http_request.requested_url.startswith(required_beginning):
                 return self.http_request.requested_url[len(required_beginning):]
+        raise Exception("somehow the requested url doesn't begin with the required beginning path")
         
     def handle_request(self) -> bytes:
         file_extension = '.' + self.http_request.requested_url.split('.')[-1] #probably a better way
@@ -78,8 +83,8 @@ class StaticAssetHandler(HttpBaseHandler):
             return HttpResponse(response_code=400, body=self.not_found_error_response(absolute_path)).dump()
 
 class ReverseProxyHandler(HttpBaseHandler):
-    def __init__(self, match_criteria: Dict[str, List], context: Dict[str, Any]):
-        super().__init__(match_criteria, context)
+    def __init__(self, match_criteria: Dict[str, List], context: Dict, server_callback: Callable = None):
+        super().__init__(match_criteria, context, server_callback)
         self.remote_host, self.remote_port = context['send_to']
         self.threading_based = True
 
@@ -94,43 +99,58 @@ class ReverseProxyHandler(HttpBaseHandler):
         return self.connect_and_send(self.remote_host, self.remote_port)
         
 class LoadBalancingHandler(ReverseProxyHandler):
-    def __init__(self, match_criteria: Dict[str, List], context: Dict):
-        super().__init__(match_criteria, context)
+    def __init__(self, match_criteria: Dict[str, List], context: Dict, server_callback: Callable = None):
+        HttpBaseHandler.__init__(self, match_criteria, context, server_callback)
         self.strategy = self.context['strategy']
         self.remote_servers = self.context['send_to']
         self.server_index = 0
-    
-    def round_robin(self) -> Tuple[str,int]:
+        self.strategy_mapping = {
+            "round_robin":self.round_robin_strategy,
+            "weighted":self.weighted_strategy
+        }
+        
+    def round_robin_strategy(self) -> Tuple[str,int]:
         server_to_send_to = self.remote_servers[self.server_index % len(self.remote_servers)]
         self.server_index +=1
         return server_to_send_to
+    
+    def weighted_strategy(self) -> Tuple[str,int]:
+        random_num = random.random()
+        for host, port, weight_range in self.remote_servers:
+            if random_num in weight_range:
+                return (host, port)
+        raise Exception("random number generated was not in any range")
 
     def handle_request(self) -> bytes:
-        host, port = self.round_robin()
-        return self.connect_and_send(host, port)
+        strategy_func = self.strategy_mapping[self.strategy]
+        remote_host, remote_port = strategy_func()
+        self.use_server_callback(**{f'{remote_host}:{remote_port}':1})
+        return self.connect_and_send(remote_host, remote_port)    
 
 class ManageHandlers:
     """
-    picks the handler based on settings and injects the needed context and the matching criteria for each handler
+    picks the handler based on settings and injects the needed context and the matching criteria for each handler. A
+    callback can additionally be passed in so that any handler that needs it (for updating fields in the server class, for example)
+    can get it. This callback is currently only used to update statistics
     """
 
-    def __init__(self, settings: Dict):
+    def __init__(self, settings: Dict, callback_to_attach: Callable = None):
         self.tasks = settings['tasks']
-        print(self.tasks)
+        self.callback = callback_to_attach
         self.implemented_handlers = {
             'serve_static':StaticAssetHandler,
             'reverse_proxy':ReverseProxyHandler,
             'load_balance':LoadBalancingHandler,
             'health_check':HealthCheckHandler}
     
-    def pick_handlers(self) -> List[HttpBaseHandler]:
+    def prepare_handlers(self) -> List[HttpBaseHandler]:
         task_handlers: List[HttpBaseHandler] = []
         for task_name, task_info in self.tasks.items():
             match_criteria = task_info['match_criteria']
             needed_context = task_info['context']
             if task_name in self.implemented_handlers:
                 handler_class = self.implemented_handlers[task_name]
-                task_handlers.append(handler_class(match_criteria, needed_context))
+                task_handlers.append(handler_class(match_criteria, needed_context, self.callback))
             else:
                 raise NotImplementedError
         return task_handlers

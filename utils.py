@@ -99,3 +99,58 @@ class HttpResponse:
     
     def __repr__(self) -> str:
         return self.dump().decode()
+
+class Range:
+    def __init__(self, lower_bound: Union[float,int], upper_bound: Union[float,int]):
+        self.lower_bound = lower_bound
+        self.upper_bound = upper_bound
+    
+    def __contains__(self, num: float):
+        return num >= self.lower_bound and num < self.upper_bound
+    
+    def __repr__(self):
+        return f'Range({self.lower_bound}, {self.upper_bound})'
+
+def create_weight_ranges(server_and_weights: List):
+        """
+        Is called when the the user wants to load balance using the weighted strategy. The purpose of this method
+        is to transform a list of tuples such as: [('localhost', 4000, 1/4), ('localhost', 4500, 1/4), ('localhost', 5000, 2/4)]
+        into a list of tuples like [('localhost', 4000, Range(0,.25)), ('localhost', 4500, Range(.25,.5)), ('localhost', 5000, Range(.5,1))] where
+        Range is a custom object that allows for testing whether a number is between a lower bound and upper bound. The reason
+        for this transformation is so that i can easily do weight based load balancing as i can just generate a random number between
+        0 and 1 and and if it lands in a range then pass the request to the server associated with that range. For example,
+        let say we have three servers like this: [('localhost', 4000, Range(0,.25)), ('localhost', 4500, Range(.25,.5)), ('localhost', 5000, Range(.5,1))].
+        If i generate a number between 0 and 1, 1/4 of the time it will be between 0 and .25, 1/4 of the time it will be
+        between .25 and .5 and 1/2 of the time it will be between .5 and 1. So, 1/4 of the time it will go to localhost:4000,
+        1/4 of the time it will go to localhost:4500, and 1/2 the time it will go to localhost:5000.
+        """
+        weight_ranges = []
+        accumulated_range = 0
+        for server_name, port, weight in server_and_weights:
+            lower_bound = accumulated_range
+            upper_bound = lower_bound + weight
+            weight_ranges.append((server_name, port, Range(lower_bound, upper_bound)))
+            accumulated_range += weight
+        return weight_ranges
+
+def settings_preparer(settings: Dict) -> Dict:
+    """ 
+    A user of this server will write settings in the settings.py file. I want it to be
+    really easy to configure the web server, but that ease for the user may result in difficulties  
+    for me. So, incase i want to transform the settings to make it easier to interpret (maybe in the future
+    the task blocks will be read and put into a custom class so that accessing it is cleaner than current dict access),
+    that transformation can occur here. 
+    """
+    for task_name, task_info in settings['tasks'].items():
+        if task_name == 'load_balance':
+            if task_info['context']['strategy'] == 'weighted':
+                task_info['context']['send_to'] = create_weight_ranges(task_info['context']['send_to'])
+    return settings
+
+#TODO
+def settings_analyzer(settings: Dict) -> Dict:
+    """ 
+    Analyzes the settings to see if there is anything malformed such as weights in the load balancing block with 
+    the weighted strategy adding up to more than 1 
+    """
+    return settings
