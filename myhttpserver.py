@@ -7,7 +7,7 @@ import logging
 from handlers import ManageHandlers,HttpBaseHandler
 from settings import settings_map
 import threading
-
+import json
 
 logging.basicConfig(filename='server.log',
                             filemode='a',
@@ -134,7 +134,7 @@ class Server:
     
 def main() -> None:
     settings = settings_analyzer(settings_preparer(settings_map[args.settings]))
-    print(settings)
+    print(json.dumps(settings,default=str,sort_keys=True, indent=2))
     server = Server(settings, port = args.port)
     try:
         server.start_loop()

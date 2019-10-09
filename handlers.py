@@ -129,7 +129,9 @@ class LoadBalancingHandler(ReverseProxyHandler):
 
 class ManageHandlers:
     """
-    picks the handler based on settings and injects the needed context and the matching criteria for each handler
+    picks the handler based on settings and injects the needed context and the matching criteria for each handler. A
+    callback can additionally be passed in so that any handler that needs it (for updating fields in the server class, for example)
+    can get it. This callback is currently only used to update statistics
     """
 
     def __init__(self, settings: Dict, callback_to_attach: Callable = None):
