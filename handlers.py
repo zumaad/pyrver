@@ -108,36 +108,12 @@ class LoadBalancingHandler(ReverseProxyHandler):
             "round_robin":self.round_robin_strategy,
             "weighted":self.weighted_strategy
         }
-        if self.strategy == "weighted":
-            self.create_weight_ranges()
-    
+        
     def round_robin_strategy(self) -> Tuple[str,int]:
         server_to_send_to = self.remote_servers[self.server_index % len(self.remote_servers)]
         self.server_index +=1
         return server_to_send_to
     
-    def create_weight_ranges(self):
-        """
-        Is called when the the user wants to load balance using the weighted strategy. The purpose of this method
-        is to transform a list of tuples such as: [('localhost', 4000, 1/4), ('localhost', 4500, 1/4), ('localhost', 5000, 2/4)]
-        into a list of tuples like [('localhost', 4000, Range(0,.25)), ('localhost', 4500, Range(.25,.5)), ('localhost', 5000, Range(.5,1))] where
-        Range is a custom object that allows for testing whether a number is between a lower bound and upper bound. The reason
-        for this transformation is so that i can easily do weight based load balancing as i can just generate a random number between
-        0 and 1 and and if it lands in a range then pass the request to the server associated with that range. For example,
-        let say we have three servers like this: [('localhost', 4000, Range(0,.25)), ('localhost', 4500, Range(.25,.5)), ('localhost', 5000, Range(.5,1))].
-        If i generate a number between 0 and 1, 1/4 of the time it will be between 0 and .25, 1/4 of the time it will be
-        between .25 and .5 and 1/2 of the time it will be between .5 and 1. So, 1/4 of the time it will go to localhost:4000,
-        1/4 of the time it will go to localhost:4500, and 1/2 the time it will go to localhost:5000.
-        """
-        weight_ranges = []
-        accumulated_range = 0
-        for server_name, port, weight in self.remote_servers:
-            lower_bound = accumulated_range
-            upper_bound = lower_bound + weight
-            weight_ranges.append(server_name, port, Range(lower_bound, upper_bound))
-            accumulated_range += weight
-        self.weight_ranges = weight_ranges
-
     def weighted_strategy(self) -> Tuple[str,int]:
         random_num = random.random()
         for host, port, weight_range in self.weight_ranges:
@@ -146,7 +122,6 @@ class LoadBalancingHandler(ReverseProxyHandler):
         raise Exception("random number generated was not in any range")
 
     def handle_request(self) -> bytes:
-        #if there are more strategies i will create a mapping of strat types to methods
         strategy_func = self.strategy_mapping[self.strategy]
         remote_host, remote_port = strategy_func()
         self.use_server_callback(**{f'{remote_host}:{remote_port}':1})
