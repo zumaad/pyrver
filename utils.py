@@ -99,3 +99,14 @@ class HttpResponse:
     
     def __repr__(self) -> str:
         return self.dump().decode()
+
+class Range:
+    def __init__(self, lower_bound: Union[float,int], upper_bound: Union[float,int]):
+        self.lower_bound = lower_bound
+        self.upper_bound = upper_bound
+    
+    def __contains__(self, num: float):
+        return num >= self.lower_bound and num < self.upper_bound
+    
+    def __repr__(self):
+        return f'Range({self.lower_bound}, {self.upper_bound})'

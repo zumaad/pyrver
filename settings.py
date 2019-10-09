@@ -25,11 +25,22 @@ settings = {
             "match_criteria": {
                 "host":["testingserver2.com"]
                 },
-            "context": {
+            "context": { 
                 'send_to':
                     [('localhost', 4000), ('localhost', 4500)],
                 "strategy":"round_robin"
                 }
+        },
+
+        "load_balance": {
+            "match_criteria": {
+                "url":["/testweighted/"]
+            },
+            "context": {
+                "send_to":
+                    [('localhost', 4000, 1/4), ('localhost', 4500, 1/4), ('localhost', 4500, 2/4)],
+                "strategy":"weighted"
+            }
         },
 
         "health_check": {

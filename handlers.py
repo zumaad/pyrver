@@ -1,9 +1,10 @@
 
-from utils import HttpRequest, HttpResponse
+from utils import HttpRequest, HttpResponse, Range
 import pathlib
 from typing import Any, List, Dict, Union, Sequence, Tuple, Callable
 import socket
 import time
+import random
 
 class HttpBaseHandler:
     def __init__(self, match_criteria: Dict[str, List], context: Dict, server_callback: Callable = None):
@@ -69,6 +70,7 @@ class StaticAssetHandler(HttpBaseHandler):
         for required_beginning in self.http_request_match_criteria['url']:
             if self.http_request.requested_url.startswith(required_beginning):
                 return self.http_request.requested_url[len(required_beginning):]
+        raise Exception("somehow the requested url doesn't begin with the required beginning path")
         
     def handle_request(self) -> bytes:
         file_extension = '.' + self.http_request.requested_url.split('.')[-1] #probably a better way
@@ -102,14 +104,51 @@ class LoadBalancingHandler(ReverseProxyHandler):
         self.strategy = self.context['strategy']
         self.remote_servers = self.context['send_to']
         self.server_index = 0
+        self.strategy_mapping = {
+            "round_robin":self.round_robin_strategy,
+            "weighted":self.weighted_strategy
+        }
+        if self.strategy == "weighted":
+            self.create_weight_ranges()
     
-    def round_robin(self) -> Tuple[str,int]:
+    def round_robin_strategy(self) -> Tuple[str,int]:
         server_to_send_to = self.remote_servers[self.server_index % len(self.remote_servers)]
         self.server_index +=1
         return server_to_send_to
+    
+    def create_weight_ranges(self):
+        """
+        Is called when the the user wants to load balance using the weighted strategy. The purpose of this method
+        is to transform a list of tuples such as: [('localhost', 4000, 1/4), ('localhost', 4500, 1/4), ('localhost', 5000, 2/4)]
+        into a list of tuples like [('localhost', 4000, Range(0,.25)), ('localhost', 4500, Range(.25,.5)), ('localhost', 5000, Range(.5,1))] where
+        Range is a custom object that allows for testing whether a number is between a lower bound and upper bound. The reason
+        for this transformation is so that i can easily do weight based load balancing as i can just generate a random number between
+        0 and 1 and and if it lands in a range then pass the request to the server associated with that range. For example,
+        let say we have three servers like this: [('localhost', 4000, Range(0,.25)), ('localhost', 4500, Range(.25,.5)), ('localhost', 5000, Range(.5,1))].
+        If i generate a number between 0 and 1, 1/4 of the time it will be between 0 and .25, 1/4 of the time it will be
+        between .25 and .5 and 1/2 of the time it will be between .5 and 1. So, 1/4 of the time it will go to localhost:4000,
+        1/4 of the time it will go to localhost:4500, and 1/2 the time it will go to localhost:5000.
+        """
+        weight_ranges = []
+        accumulated_range = 0
+        for server_name, port, weight in self.remote_servers:
+            lower_bound = accumulated_range
+            upper_bound = lower_bound + weight
+            weight_ranges.append(server_name, port, Range(lower_bound, upper_bound))
+            accumulated_range += weight
+        self.weight_ranges = weight_ranges
+
+    def weighted_strategy(self) -> Tuple[str,int]:
+        random_num = random.random()
+        for host, port, weight_range in self.weight_ranges:
+            if random_num in weight_range:
+                return (host, port)
+        raise Exception("random number generated was not in any range")
 
     def handle_request(self) -> bytes:
-        remote_host, remote_port = self.round_robin()
+        #if there are more strategies i will create a mapping of strat types to methods
+        strategy_func = self.strategy_mapping[self.strategy]
+        remote_host, remote_port = strategy_func()
         self.use_server_callback(**{f'{remote_host}:{remote_port}':1})
         return self.connect_and_send(remote_host, remote_port)    
 
