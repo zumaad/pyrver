@@ -1,7 +1,7 @@
 import socket
 import argparse
 import selectors
-from utils import ClientInformation, handle_exceptions, log_debug_info, SocketType, settings_parser, parse_http_request, HttpResponse
+from utils import ClientInformation, handle_exceptions, log_debug_info, SocketType, settings_parser, parse_http_request, HttpResponse, settings_analyzer, settings_preparer
 from typing import Dict, Tuple, Union, Any, List, Callable
 import logging
 from handlers import ManageHandlers,HttpBaseHandler
@@ -133,7 +133,8 @@ class Server:
         print(self.statistics)
     
 def main() -> None:
-    settings = settings_map[args.settings]
+    settings = settings_analyzer(settings_preparer(settings_map[args.settings]))
+    print(settings)
     server = Server(settings, port = args.port)
     try:
         server.start_loop()

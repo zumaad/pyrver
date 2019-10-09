@@ -141,14 +141,14 @@ def settings_preparer(settings: Dict) -> Dict:
     the task blocks will be read and put into a custom class so that accessing it is cleaner than current dict access),
     that transformation can occur here. 
     """
-    for task in settings['tasks']:
-        if task == 'load_balance':
-            if task['load_balance']['context']['strategy'] == 'weighted':
-                task['load_balance']['context']['send_to'] = create_weight_ranges(task['load_balance']['context']['send_to'])
+    for task_name, task_info in settings['tasks'].items():
+        if task_name == 'load_balance':
+            if task_info['context']['strategy'] == 'weighted':
+                task_info['context']['send_to'] = create_weight_ranges(task_info['context']['send_to'])
     return settings
 
 #TODO
-def settings_analyzer(settings) -> Dict:
+def settings_analyzer(settings: Dict) -> Dict:
     """ 
     Analyzes the settings to see if there is anything malformed such as weights in the load balancing block with 
     the weighted strategy adding up to more than 1 

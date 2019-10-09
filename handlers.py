@@ -100,7 +100,7 @@ class ReverseProxyHandler(HttpBaseHandler):
         
 class LoadBalancingHandler(ReverseProxyHandler):
     def __init__(self, match_criteria: Dict[str, List], context: Dict, server_callback: Callable = None):
-        super().__init__(match_criteria, context, server_callback)
+        HttpBaseHandler.__init__(self, match_criteria, context, server_callback)
         self.strategy = self.context['strategy']
         self.remote_servers = self.context['send_to']
         self.server_index = 0
@@ -116,7 +116,7 @@ class LoadBalancingHandler(ReverseProxyHandler):
     
     def weighted_strategy(self) -> Tuple[str,int]:
         random_num = random.random()
-        for host, port, weight_range in self.weight_ranges:
+        for host, port, weight_range in self.remote_servers:
             if random_num in weight_range:
                 return (host, port)
         raise Exception("random number generated was not in any range")
@@ -135,7 +135,6 @@ class ManageHandlers:
     def __init__(self, settings: Dict, callback_to_attach: Callable = None):
         self.tasks = settings['tasks']
         self.callback = callback_to_attach
-        print(self.tasks)
         self.implemented_handlers = {
             'serve_static':StaticAssetHandler,
             'reverse_proxy':ReverseProxyHandler,
