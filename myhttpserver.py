@@ -64,7 +64,7 @@ class Server:
                 handle_exceptions(e, socket_wrapper)
                 
             if not recv_data: #clients (such as browsers) will send an empty message when they break the connection.
-                self.close_client_connection(socket_wrapper)
+                self.close_client_connection(client_socket)
             else:
                 http_request = parse_http_request(recv_data)
                 print(http_request)
@@ -96,16 +96,18 @@ class Server:
             you can truncate your message accordingly and repeat.  """
         BUFFER_SIZE = 1024 #is this optimal, i have no clue :), should research what a good buffer size is.
         while response:
-            bytes_sent = client_socket.send(response[:BUFFER_SIZE])
-            if bytes_sent < BUFFER_SIZE:
-                response = response[bytes_sent:]
-            else:
-                response = response[BUFFER_SIZE:]
-        print("done")
+            try:
+                bytes_sent = client_socket.send(response[:BUFFER_SIZE])
+                if bytes_sent < BUFFER_SIZE:
+                    response = response[bytes_sent:]
+                else:
+                    response = response[BUFFER_SIZE:]
+            except BrokenPipeError:
+                self.close_client_connection(client_socket)
+                break
+        
 
-    def close_client_connection(self, socket_wrapper) -> None:
-        log_debug_info('closing connection', socket_wrapper.data.addr,stdout_print=True)
-        client_socket = socket_wrapper.fileobj
+    def close_client_connection(self, client_socket) -> None:
         self.client_manager.unregister(client_socket)
         client_socket.close()      
 
