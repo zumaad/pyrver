@@ -46,6 +46,7 @@ class HealthCheckHandler(HttpBaseHandler):
 class StaticAssetHandler(HttpBaseHandler):
     def __init__(self, match_criteria: Dict[str, List], context: Dict, server_callback: Callable = None):
         super().__init__(match_criteria, context, server_callback)
+        self.threading_based = True
         self.static_directory_path = context['staticRoot']
         self.all_files = set(pathlib.Path(self.static_directory_path).glob('**/*')) #get all files in the static directory
         self.file_extension_mime_type = {

@@ -94,7 +94,7 @@ class Server:
             the error and try again because you have no clue how many bytes were actually written. However, using the send
             method gives you much finer control as it returns how many bytes were written, so if all the bytes couldn't be written
             you can truncate your message accordingly and repeat.  """
-        BUFFER_SIZE = 1024 #is this optimal, i have no clue :), should research what a good buffer size is.
+        BUFFER_SIZE = 1024 * 16
         while response:
             try:
                 bytes_sent = client_socket.send(response[:BUFFER_SIZE])
@@ -102,11 +102,17 @@ class Server:
                     response = response[bytes_sent:]
                 else:
                     response = response[BUFFER_SIZE:]
-            except BrokenPipeError:
+            #for when client unexpectedly drops connection, chrome does this when serving large files as it will make
+            #two requests and drop the first one's connection thus resulting in this error. idk why it does that, maybe
+            #i am misinterpreting something.
+            except BrokenPipeError: 
+                self.close_client_connection(client_socket)
+                break
+            except BlockingIOError:
+                print("closing connection on blocking io error")
                 self.close_client_connection(client_socket)
                 break
         
-
     def close_client_connection(self, client_socket) -> None:
         self.client_manager.unregister(client_socket)
         client_socket.close()      
