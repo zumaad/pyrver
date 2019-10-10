@@ -59,6 +59,7 @@ class Server:
         if events & selectors.EVENT_READ:
             try:
                 recv_data = client_socket.recv(1024)
+                print(recv_data)
             except (ConnectionResetError, TimeoutError) as e: 
                 handle_exceptions(e, socket_wrapper)
                 
@@ -66,7 +67,8 @@ class Server:
                 self.close_client_connection(socket_wrapper)
             else:
                 http_request = parse_http_request(recv_data)
-                # self.update_statistics(responses_sent=1, requests_recv=1)
+                print(http_request)
+                self.update_statistics(responses_sent=1, requests_recv=1)
                 for handler in self.request_handlers:
                     if handler.should_handle(http_request):
                         if handler.threading_based:
@@ -99,6 +101,7 @@ class Server:
                 response = response[bytes_sent:]
             else:
                 response = response[BUFFER_SIZE:]
+        print("done")
 
     def close_client_connection(self, socket_wrapper) -> None:
         log_debug_info('closing connection', socket_wrapper.data.addr,stdout_print=True)

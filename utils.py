@@ -96,7 +96,7 @@ class HttpResponse:
         header_list = [f'{header_name}: {value}' for header_name, value in self.headers.items()]
         header_lines = '\r\n'.join(header_list) + '\r\n\r\n' #needs to be two new lines characters after headers
         return status_line.encode() + header_lines.encode() + self.body
-    
+        
     def __repr__(self) -> str:
         return self.dump().decode()
 

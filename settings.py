@@ -14,7 +14,7 @@ settings = {
 
         "serve_static":{
             "match_criteria": {
-                "port":[str(port_num) for port_num in range(3330,3335)], 
+                "port":['9999'], 
                 "host": ["testingserver.com","localhost","testingserver2.com"], 
                 "url":["/static/"]
                               },

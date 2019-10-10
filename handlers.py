@@ -57,7 +57,15 @@ class StaticAssetHandler(HttpBaseHandler):
             '.png':'image/png',
             '.css':'text/css',
             '.html':'text/html',
-            '.js':'text/javascript'
+            '.js':'text/javascript',
+            '.mp4':'video/mp4',
+            '.flv':'video/x-flv',
+            '.m3u8':'application/x-mpegURL',
+            '.ts':'video/MP2T',
+            '.3gp':'video/3gpp',
+            '.mov':'video/quicktime',
+            '.avi':'video/x-msvideo',
+            '.wmv':'video/x-ms-wmv'
         }
 
     def not_found_error_response(self, absolute_path: str) -> str:
