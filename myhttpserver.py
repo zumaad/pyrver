@@ -59,7 +59,7 @@ class Server:
         try:
             recv_data = client_socket.recv(1024)
         except (ConnectionResetError, TimeoutError) as e: 
-            handle_exceptions(e, client_socket)
+            handle_exceptions(e)
         #clients (such as browsers) will send an empty message when they are closing
         #their side of the connection.
         if not recv_data: 
