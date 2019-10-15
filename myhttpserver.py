@@ -103,8 +103,9 @@ class Server:
             except BrokenPipeError: 
                 self.close_client_connection(client_socket)
                 break
-            except BlockingIOError: #don't think i should do this, should just continue as client's buffer could be full, so just put pass
+            except BlockingIOError: 
                 print("closing connection on blocking io error")
+                #DON'T THINK I SHOULD DO THIS, should just continue as client's buffer could be full, so just put pass
                 self.close_client_connection(client_socket)
                 break
         
