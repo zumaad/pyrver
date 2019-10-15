@@ -24,20 +24,21 @@ class Server:
         self.client_manager = selectors.DefaultSelector()
         self.host = host
         self.port = port
-        print(f'listening on port {self.port}')
         self.statistics = {'bytes_sent':0, 'bytes_recv':0, 'requests_recv':0, 'responses_sent':0}
+        # The reason for this set is that every request is handled in its own thread but before
+        # the socket is able to be read, control is yeilded to the main thread which picks which sockets are to be read.
+        # Since the sub thread hasn't yet exhausted that client socket, the main thread thinks that socket needs to be serviced. 
+        # So this set prevents that by only servicing client sockets not currently in the set.
+        self.clients_currently_being_serviced = set() 
+        print(f'listening on port {self.port}')
+
         
     def accept_new_client(self, master_socket) -> None:
         new_client_socket, addr = master_socket.accept()
         new_client_socket.setblocking(False)
-        self.client_manager.register(new_client_socket, selectors.EVENT_READ | selectors.EVENT_WRITE, data = ClientInformation(addr,SocketType.CLIENT_SOCKET))
+        self.client_manager.register(new_client_socket, selectors.EVENT_READ, data = ClientInformation(addr,SocketType.CLIENT_SOCKET))
 
     def on_compatible_handler(self, client_socket, handler: HttpBaseHandler, data_client_sent: bytes) -> None:
-        """ 
-        This function was made to encapsulate the whole process of getting an http response
-        and sending it to a client so that i could just pass this function as a target of a new thread
-        if i wanted to use a thread based handler (new thread for every request) 
-        """
         handler.raw_http_request = data_client_sent
         http_response = handler.handle_request()
         self.update_statistics(bytes_recv=len(data_client_sent), bytes_sent=len(http_response))
@@ -53,34 +54,28 @@ class Server:
         new_thread.daemon = True
         new_thread.start()
 
-    def handle_client_request(self, socket_wrapper, events) -> None:
+    def handle_client_request(self, client_socket) -> None:
         recv_data = None 
-        client_socket = socket_wrapper.fileobj
-        if events & selectors.EVENT_READ:
-            try:
-                recv_data = client_socket.recv(1024)
-                print(recv_data)
-            except (ConnectionResetError, TimeoutError) as e: 
-                handle_exceptions(e, socket_wrapper)
-                
-            if not recv_data: #clients (such as browsers) will send an empty message when they break the connection.
-                self.close_client_connection(client_socket)
+        try:
+            recv_data = client_socket.recv(1024)
+        except (ConnectionResetError, TimeoutError) as e: 
+            handle_exceptions(e, client_socket)
+        #clients (such as browsers) will send an empty message when they are closing
+        #their side of the connection.
+        if not recv_data: 
+            print("closing client connection!")
+            self.close_client_connection(client_socket)
+        else:
+            http_request = parse_http_request(recv_data)
+            self.update_statistics(responses_sent=1, requests_recv=1)
+            for handler in self.request_handlers:
+                if handler.should_handle(http_request):
+                    self.on_compatible_handler(client_socket, handler, recv_data)
+                    break
             else:
-                http_request = parse_http_request(recv_data)
-                print(http_request)
-                self.update_statistics(responses_sent=1, requests_recv=1)
-                for handler in self.request_handlers:
-                    if handler.should_handle(http_request):
-                        if handler.threading_based:
-                            self.execute_in_new_thread(self.on_compatible_handler, (client_socket, handler, recv_data,))
-                        else:
-                            self.on_compatible_handler(client_socket, handler, recv_data)
-                        break
-                #if there is no handler able to handle the request. This else clause is only executed if the for loop is finished
-                #without the "break" being executed, which is only when there is no handler able to handle the request.
-                else: 
-                    self.on_no_compatible_handler(client_socket)
-
+                self.on_no_compatible_handler(client_socket)
+            self.clients_currently_being_serviced.remove(client_socket)
+        
     def update_statistics(self, **statistics) -> None:
         for statistic_name, statistic_value in statistics.items():
             if statistic_name in self.statistics:
@@ -108,7 +103,7 @@ class Server:
             except BrokenPipeError: 
                 self.close_client_connection(client_socket)
                 break
-            except BlockingIOError:
+            except BlockingIOError: #don't think i should do this, should just continue as client's buffer could be full, so just put pass
                 print("closing connection on blocking io error")
                 self.close_client_connection(client_socket)
                 break
@@ -133,8 +128,11 @@ class Server:
                 if socket_wrapper.data.socket_type == SocketType.MASTER_SOCKET:
                     self.accept_new_client(socket_wrapper.fileobj)
                 elif socket_wrapper.data.socket_type == SocketType.CLIENT_SOCKET:
-                    self.handle_client_request(socket_wrapper, events)
-
+                    client_socket = socket_wrapper.fileobj
+                    if client_socket not in self.clients_currently_being_serviced:
+                        self.clients_currently_being_serviced.add(client_socket)
+                        self.execute_in_new_thread(self.handle_client_request,(client_socket,))
+                    
     def start_loop(self) -> None:
         self.init_master_socket()
         self.loop_forever()

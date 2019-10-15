@@ -10,7 +10,6 @@ class HttpBaseHandler:
     def __init__(self, match_criteria: Dict[str, List], context: Dict, server_callback: Callable = None):
         self.http_request_match_criteria = match_criteria
         self.context = context
-        self.threading_based = False
         self.raw_http_request = b''
         self.server_callback = server_callback
 
@@ -46,7 +45,6 @@ class HealthCheckHandler(HttpBaseHandler):
 class StaticAssetHandler(HttpBaseHandler):
     def __init__(self, match_criteria: Dict[str, List], context: Dict, server_callback: Callable = None):
         super().__init__(match_criteria, context, server_callback)
-        self.threading_based = True
         self.static_directory_path = context['staticRoot']
         self.all_files = set(pathlib.Path(self.static_directory_path).glob('**/*')) #get all files in the static directory
         self.file_extension_mime_type = {
@@ -95,8 +93,7 @@ class ReverseProxyHandler(HttpBaseHandler):
     def __init__(self, match_criteria: Dict[str, List], context: Dict, server_callback: Callable = None):
         super().__init__(match_criteria, context, server_callback)
         self.remote_host, self.remote_port = context['send_to']
-        self.threading_based = True
-
+        
     def connect_and_send(self, remote_host: str, remote_port: int) -> bytes:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as remote_server:
             remote_server.connect((remote_host,int(remote_port)))

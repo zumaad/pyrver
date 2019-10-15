@@ -72,11 +72,11 @@ def log_debug_info(*args: Any, stdout_print:bool = False) -> None:
     else:
         logging.debug(logs)
 
-def handle_exceptions(exception: Exception, socket_wrapper) -> None:
+def handle_exceptions(exception: Exception) -> None:
     if isinstance(exception,ConnectionResetError):
-        log_debug_info("connection reset error, disconnecting: ", socket_wrapper.data.addr)
+        log_debug_info("connection reset error")
     elif isinstance(exception, TimeoutError):
-        log_debug_info("time out error, disconnecting: ", socket_wrapper.data.addr)
+        log_debug_info("time out error, disconnecting")
 
 class HttpResponse:
     
