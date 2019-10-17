@@ -1,7 +1,7 @@
 import socket
 import argparse
 import selectors
-from utils import ClientInformation, handle_exceptions, log_debug_info, SocketType, settings_parser, parse_http_request, HttpResponse, settings_analyzer, settings_preparer
+from utils import ClientInformation, handle_exceptions, log_debug_info, SocketType, settings_parser, parse_http_request, HttpResponse, settings_analyzer, settings_preparer,execute_in_new_thread
 from typing import Dict, Tuple, Union, Any, List, Callable
 import logging
 from handlers import ManageHandlers,HttpBaseHandler
@@ -18,7 +18,41 @@ parser.add_argument('--port','-p',type=int, default=9999)
 parser.add_argument('--settings','-s',type=int)
 args = parser.parse_args()  
 
+class PurelyThreadedServer:
+    """ 
+    This implementation of the server creates a new thread for each new client and
+    the client is handled entirely within that thread. 
+    """
+    def __init__(self):
+        pass
+
+    def init_master_socket(self):
+        pass
+
+    def start_loop(self):
+        pass
+
+    def stop_loop(self):
+        pass
+
+    def loop_forever(self):
+        pass
+
+    def accept_new_client(self):
+        pass
+
+    def handle_client_request(self):
+        pass
+    
+    def close_client_connection(self):
+        pass
+
+
 class Server:
+    """
+    This implementation of the server creates a new thread for every request, but the clients
+    themselves are not given their own threads.
+    """
     def __init__(self, settings: Dict, host: str = '0.0.0.0', port: int = 9999):
         self.request_handlers = ManageHandlers(settings, self.update_statistics).prepare_handlers()
         self.client_manager = selectors.DefaultSelector()
@@ -49,11 +83,6 @@ class Server:
         self.update_statistics(bytes_sent=len(http_error_response))
         self.send_all(client_socket, http_error_response)
     
-    def execute_in_new_thread(self, func, args):
-        new_thread = threading.Thread(target = func, args = args)
-        new_thread.daemon = True
-        new_thread.start()
-
     def handle_client_request(self, client_socket) -> None:
         recv_data = None 
         try:
@@ -132,7 +161,7 @@ class Server:
                     client_socket = socket_wrapper.fileobj
                     if client_socket not in self.clients_currently_being_serviced:
                         self.clients_currently_being_serviced.add(client_socket)
-                        self.execute_in_new_thread(self.handle_client_request,(client_socket,))
+                        execute_in_new_thread(self.handle_client_request,(client_socket,))
                     
     def start_loop(self) -> None:
         self.init_master_socket()
