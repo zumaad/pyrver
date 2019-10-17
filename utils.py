@@ -46,9 +46,18 @@ class HttpRequest:
             return self.host
         else:
             return self.headers[request_part]
+    
+    @classmethod
+    def from_bytes(cls, raw_http_request: bytes) -> 'HttpRequest':
+        http_request_lines = raw_http_request.decode().split('\r\n')
+        method,requested_url = http_request_lines[0].split()[:2] #the first two words on the first line of the request
+        headers = {header.split(': ')[0]:header.split(': ')[1] for header in http_request_lines[1:-2]}
+        payload = http_request_lines[-1]
+        return cls(method, requested_url, headers, payload)
 
     def __repr__(self) -> str:
         return str(vars(self))
+
 
 def parse_http_request(raw_http_request: bytes) -> HttpRequest:
     http_request_lines = raw_http_request.decode().split('\r\n')
@@ -154,3 +163,8 @@ def settings_analyzer(settings: Dict) -> Dict:
     the weighted strategy adding up to more than 1 
     """
     return settings
+
+def execute_in_new_thread(self, func, args):
+    new_thread = threading.Thread(target = func, args = args)
+    new_thread.daemon = True
+    new_thread.start()

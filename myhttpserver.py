@@ -1,7 +1,7 @@
 import socket
 import argparse
 import selectors
-from utils import ClientInformation, handle_exceptions, log_debug_info, SocketType, settings_parser, parse_http_request, HttpResponse, settings_analyzer, settings_preparer,execute_in_new_thread
+from utils import ClientInformation, handle_exceptions, log_debug_info, SocketType, settings_parser, parse_http_request, HttpResponse, settings_analyzer, settings_preparer,execute_in_new_thread,HttpRequest
 from typing import Dict, Tuple, Union, Any, List, Callable
 import logging
 from handlers import ManageHandlers,HttpBaseHandler
@@ -16,36 +16,119 @@ logging.basicConfig(filename='server.log',
 parser = argparse.ArgumentParser()
 parser.add_argument('--port','-p',type=int, default=9999)
 parser.add_argument('--settings','-s',type=int)
-args = parser.parse_args()  
+args = parser.parse_args() 
+
+class BaseServer:
+
+    def update_statistics(self, **statistics) -> None:
+        for statistic_name, statistic_value in statistics.items():
+            if statistic_name in self.statistics:
+                self.statistics[statistic_name] += statistic_value
+            else:
+                self.statistics[statistic_name] = statistic_value
+    def send_all(self, client_socket, response: bytes) -> None:
+        """ I can't just use the sendall method on the socket object because it throws an error when it can't send
+            all the bytes for whatever reason (typically other socket isn't ready for reading i guess) and you can't just catch
+            the error and try again because you have no clue how many bytes were actually written. However, using the send
+            method gives you much finer control as it returns how many bytes were written, so if all the bytes couldn't be written
+            you can truncate your message accordingly and repeat.  """
+        BUFFER_SIZE = 1024 * 16
+        while response:
+            try:
+                bytes_sent = client_socket.send(response[:BUFFER_SIZE])
+                if bytes_sent < BUFFER_SIZE:
+                    response = response[bytes_sent:]
+                else:
+                    response = response[BUFFER_SIZE:]
+            #for when client unexpectedly drops connection, chrome does this when serving large files as it will make
+            #two requests and drop the first one's connection thus resulting in this error. idk why it does that, maybe
+            #i am misinterpreting something.
+            except BrokenPipeError: 
+                self.close_client_connection(client_socket)
+                break
+            except BlockingIOError: 
+                print("closing connection on blocking io error")
+                #DON'T THINK I SHOULD DO THIS, should just continue as client's buffer could be full, so just put pass
+                self.close_client_connection(client_socket)
+                break
+
+    def on_compatible_handler(self, client_socket, handler: HttpBaseHandler, data_client_sent: bytes) -> None:
+        """
+        Handles dealing with client when there is a handler that can handle the http request, meaning that
+        the http request matches atleast one of the match criteria for the tasks defined in settings.py
+        """
+        handler.raw_http_request = data_client_sent
+        http_response = handler.handle_request()
+        self.update_statistics(bytes_recv=len(data_client_sent), bytes_sent=len(http_response))
+        self.send_all(client_socket, http_response)
+
+    def on_no_compatible_handler(self, client_socket) -> None:
+        """
+        Handles dealing with the client when there is no handler that can handle the http request, meaning
+        that the http request did not match any of the match criteria for any of the tasks in settings.py
+        """
+        http_error_response = HttpResponse(400, 'No handler could handle your request, check the matching criteria in settings.py').dump()
+        self.update_statistics(bytes_sent=len(http_error_response))
+        self.send_all(client_socket, http_error_response)
+    
+
 
 class PurelyThreadedServer:
     """ 
     This implementation of the server creates a new thread for each new client and
     the client is handled entirely within that thread. 
     """
-    def __init__(self):
-        pass
+    def __init__(self, settings: Dict, host: str = '0.0.0.0', port: int = 9999):
+        self.host = host
+        self.port = port
 
     def init_master_socket(self):
-        pass
+        master_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        master_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        master_socket.bind((self.host, self.port))
+        master_socket.listen()
+        # master_socket.setblocking(False)
+        self.master_socket = master_socket
 
     def start_loop(self):
-        pass
+        self.init_master_socket()
+        self.loop_forever()
 
     def stop_loop(self):
         pass
 
     def loop_forever(self):
-        pass
+        while True:
+            new_client, addr = self.master_socket.accept()
+            self.accept_new_client(new_client)
 
-    def accept_new_client(self):
-        pass
-
-    def handle_client_request(self):
-        pass
-    
-    def close_client_connection(self):
-        pass
+    def accept_new_client(self, new_client):
+        #if client is idle for this long, an error should be raised and should signal closing
+        #the connection
+        new_client.settimeout(20) 
+        execute_in_new_thread(self.handle_client, (new_client,))
+        
+    def handle_client(self, client):
+        while True:
+            raw_request = None
+            try:
+                raw_request = client.recv(1024)
+            except (ConnectionResetError, TimeoutError) as e: 
+                handle_exceptions(e)
+            if raw_request:
+                http_request = HttpRequest.from_bytes(raw_request)
+                self.update_statistics(responses_sent=1, requests_recv=1)
+                for handler in self.request_handlers:
+                if handler.should_handle(http_request):
+                    self.on_compatible_handler(client_socket, handler, recv_data)
+                    break
+            else:
+                self.close_client_connection(client)
+                break
+            
+    def close_client_connection(self, client_socket) -> None:
+        client_socket.close()
+        
 
 
 class Server:
