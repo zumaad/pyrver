@@ -14,7 +14,6 @@ logging.basicConfig(filename='server.log',
                             datefmt='%H:%M:%S',
                             level=logging.DEBUG)
 parser = argparse.ArgumentParser()
-parser.add_argument('--port','-p',type=int, default=9999)
 parser.add_argument('--settings','-s',type=int)
 args = parser.parse_args() 
 
@@ -24,6 +23,7 @@ class BaseServer:
         self.host = host
         self.port = port
         self.request_handlers = ManageHandlers(settings, self.update_statistics).prepare_handlers()
+        self.statistics = {'bytes_sent':0, 'bytes_recv':0, 'requests_recv':0, 'responses_sent':0}
 
     def update_statistics(self, **statistics) -> None:
         for statistic_name, statistic_value in statistics.items():
@@ -75,29 +75,31 @@ class BaseServer:
         self.send_all(client_socket, http_error_response)
     
     def handle_client_request(self, client_socket) -> None:
-        recv_data = None 
+        print("handling client request")
+        raw_request = None 
         try:
+            print("attempting to read")
             raw_request = client_socket.recv(1024)
+            print(raw_request)
         except (ConnectionResetError, TimeoutError) as e: 
             handle_exceptions(e)
         #clients (such as browsers) will send an empty message when they are closing
         #their side of the connection.
-        if not recv_data: 
+        if not raw_request: 
             print("closing client connection!")
             self.close_client_connection(client_socket)
+            raise Exception("connection closed")
         else:
-            http_request = parse_http_request(recv_data)
+            http_request = parse_http_request(raw_request)
             self.update_statistics(responses_sent=1, requests_recv=1)
             for handler in self.request_handlers:
                 if handler.should_handle(http_request):
-                    handler.raw_http_request = recv_data
-                    self.on_compatible_handler(client_socket, handler, recv_data)
+                    handler.raw_http_request = raw_request
+                    self.on_compatible_handler(client_socket, handler)
                     break
             else:
                 self.on_no_compatible_handler(client_socket)
-            self.clients_currently_being_serviced.remove(client_socket)
     
-
 class PurelyThreadedServer(BaseServer):
     """ 
     This implementation of the server creates a new thread for each new client and
@@ -124,6 +126,7 @@ class PurelyThreadedServer(BaseServer):
     def loop_forever(self):
         while True:
             new_client, addr = self.master_socket.accept()
+            print("accpeted new client")
             self.accept_new_client(new_client)
 
     def accept_new_client(self, new_client):
@@ -133,8 +136,12 @@ class PurelyThreadedServer(BaseServer):
         execute_in_new_thread(self.handle_client, (new_client,))
         
     def handle_client(self, client):
+        print("handling client!")
         while True:
-            self.handle_client_request(client) #need to break on timeout and stuff
+            try:
+                self.handle_client_request(client) #need to break on timeout and stuff
+            except:
+                break
             
     def close_client_connection(self, client_socket) -> None:
         client_socket.close()
@@ -260,11 +267,12 @@ class Server:
     def stop_loop(self) -> None:
         self.master_socket.close()
         print(self.statistics)
-    
+
 def main() -> None:
     settings = settings_analyzer(settings_preparer(settings_map[args.settings]))
     print(json.dumps(settings,default=str,sort_keys=True, indent=2))
-    server = Server(settings, port = args.port)
+    # server = Server(settings, port = args.port)
+    server = PurelyThreadedServer(settings)
     try:
         server.start_loop()
     except KeyboardInterrupt:
