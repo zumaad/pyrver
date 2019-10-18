@@ -26,6 +26,7 @@ class BaseServer:
                 self.statistics[statistic_name] += statistic_value
             else:
                 self.statistics[statistic_name] = statistic_value
+
     def send_all(self, client_socket, response: bytes) -> None:
         """ I can't just use the sendall method on the socket object because it throws an error when it can't send
             all the bytes for whatever reason (typically other socket isn't ready for reading i guess) and you can't just catch
@@ -52,14 +53,12 @@ class BaseServer:
                 self.close_client_connection(client_socket)
                 break
 
-    def on_compatible_handler(self, client_socket, handler: HttpBaseHandler, data_client_sent: bytes) -> None:
+    def on_compatible_handler(self, client_socket, handler: HttpBaseHandler) -> None:
         """
         Handles dealing with client when there is a handler that can handle the http request, meaning that
         the http request matches atleast one of the match criteria for the tasks defined in settings.py
         """
-        handler.raw_http_request = data_client_sent
         http_response = handler.handle_request()
-        self.update_statistics(bytes_recv=len(data_client_sent), bytes_sent=len(http_response))
         self.send_all(client_socket, http_response)
 
     def on_no_compatible_handler(self, client_socket) -> None:
@@ -68,12 +67,33 @@ class BaseServer:
         that the http request did not match any of the match criteria for any of the tasks in settings.py
         """
         http_error_response = HttpResponse(400, 'No handler could handle your request, check the matching criteria in settings.py').dump()
-        self.update_statistics(bytes_sent=len(http_error_response))
         self.send_all(client_socket, http_error_response)
     
+    def handle_client_request(self, client_socket) -> None:
+        recv_data = None 
+        try:
+            raw_request = client_socket.recv(1024)
+        except (ConnectionResetError, TimeoutError) as e: 
+            handle_exceptions(e)
+        #clients (such as browsers) will send an empty message when they are closing
+        #their side of the connection.
+        if not recv_data: 
+            print("closing client connection!")
+            self.close_client_connection(client_socket)
+        else:
+            http_request = parse_http_request(recv_data)
+            self.update_statistics(responses_sent=1, requests_recv=1)
+            for handler in self.request_handlers:
+                if handler.should_handle(http_request):
+                    handler.raw_http_request = recv_data
+                    self.on_compatible_handler(client_socket, handler, recv_data)
+                    break
+            else:
+                self.on_no_compatible_handler(client_socket)
+            self.clients_currently_being_serviced.remove(client_socket)
+    
 
-
-class PurelyThreadedServer:
+class PurelyThreadedServer(BaseServer):
     """ 
     This implementation of the server creates a new thread for each new client and
     the client is handled entirely within that thread. 
@@ -110,27 +130,11 @@ class PurelyThreadedServer:
         
     def handle_client(self, client):
         while True:
-            raw_request = None
-            try:
-                raw_request = client.recv(1024)
-            except (ConnectionResetError, TimeoutError) as e: 
-                handle_exceptions(e)
-            if raw_request:
-                http_request = HttpRequest.from_bytes(raw_request)
-                self.update_statistics(responses_sent=1, requests_recv=1)
-                for handler in self.request_handlers:
-                if handler.should_handle(http_request):
-                    self.on_compatible_handler(client_socket, handler, recv_data)
-                    break
-            else:
-                self.close_client_connection(client)
-                break
+            self.handle_client_request(client) #need to break on timeout and stuff
             
     def close_client_connection(self, client_socket) -> None:
         client_socket.close()
         
-
-
 class Server:
     """
     This implementation of the server creates a new thread for every request, but the clients
@@ -155,10 +159,8 @@ class Server:
         new_client_socket.setblocking(False)
         self.client_manager.register(new_client_socket, selectors.EVENT_READ, data = ClientInformation(addr,SocketType.CLIENT_SOCKET))
 
-    def on_compatible_handler(self, client_socket, handler: HttpBaseHandler, data_client_sent: bytes) -> None:
-        handler.raw_http_request = data_client_sent
+    def on_compatible_handler(self, client_socket, handler: HttpBaseHandler) -> None:
         http_response = handler.handle_request()
-        self.update_statistics(bytes_recv=len(data_client_sent), bytes_sent=len(http_response))
         self.send_all(client_socket, http_response)
 
     def on_no_compatible_handler(self, client_socket) -> None:
@@ -167,22 +169,23 @@ class Server:
         self.send_all(client_socket, http_error_response)
     
     def handle_client_request(self, client_socket) -> None:
-        recv_data = None 
+        raw_request = None 
         try:
-            recv_data = client_socket.recv(1024)
+            raw_request = client_socket.recv(1024)
         except (ConnectionResetError, TimeoutError) as e: 
             handle_exceptions(e)
         #clients (such as browsers) will send an empty message when they are closing
         #their side of the connection.
-        if not recv_data: 
+        if not raw_request: 
             print("closing client connection!")
             self.close_client_connection(client_socket)
         else:
-            http_request = parse_http_request(recv_data)
+            http_request = HttpRequest.from_bytes(raw_request)
             self.update_statistics(responses_sent=1, requests_recv=1)
             for handler in self.request_handlers:
                 if handler.should_handle(http_request):
-                    self.on_compatible_handler(client_socket, handler, recv_data)
+                    handler.raw_http_request = raw_request
+                    self.on_compatible_handler(client_socket, handler)
                     break
             else:
                 self.on_no_compatible_handler(client_socket)

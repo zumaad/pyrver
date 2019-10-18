@@ -3,6 +3,7 @@ from typing import Union, Dict, List, Any
 import logging
 import datetime
 import json
+import threading
 
 class SocketType(Enum):
     MASTER_SOCKET = 1
@@ -164,7 +165,7 @@ def settings_analyzer(settings: Dict) -> Dict:
     """
     return settings
 
-def execute_in_new_thread(self, func, args):
+def execute_in_new_thread(func, args):
     new_thread = threading.Thread(target = func, args = args)
     new_thread.daemon = True
     new_thread.start()
