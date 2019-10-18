@@ -18,6 +18,8 @@ parser.add_argument('--port','-p',type=int, default=9999)
 parser.add_argument('--settings','-s',type=int)
 args = parser.parse_args()  
 
+cl
+
 class Server:
     def __init__(self, settings: Dict, host: str = '0.0.0.0', port: int = 9999):
         self.request_handlers = ManageHandlers(settings, self.update_statistics).prepare_handlers()
