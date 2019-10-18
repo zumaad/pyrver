@@ -169,3 +169,7 @@ def execute_in_new_thread(func, args):
     new_thread = threading.Thread(target = func, args = args)
     new_thread.daemon = True
     new_thread.start()
+
+
+class ServerFactory:
+    pass
