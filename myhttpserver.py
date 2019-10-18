@@ -20,6 +20,11 @@ args = parser.parse_args()
 
 class BaseServer:
 
+    def __init__(self, settings: Dict, host: str = '0.0.0.0', port: int = 9999):
+        self.host = host
+        self.port = port
+        self.request_handlers = ManageHandlers(settings, self.update_statistics).prepare_handlers()
+
     def update_statistics(self, **statistics) -> None:
         for statistic_name, statistic_value in statistics.items():
             if statistic_name in self.statistics:
@@ -99,8 +104,7 @@ class PurelyThreadedServer(BaseServer):
     the client is handled entirely within that thread. 
     """
     def __init__(self, settings: Dict, host: str = '0.0.0.0', port: int = 9999):
-        self.host = host
-        self.port = port
+        super().__init__(settings, host, port)
 
     def init_master_socket(self):
         master_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -141,10 +145,10 @@ class Server:
     themselves are not given their own threads.
     """
     def __init__(self, settings: Dict, host: str = '0.0.0.0', port: int = 9999):
-        self.request_handlers = ManageHandlers(settings, self.update_statistics).prepare_handlers()
-        self.client_manager = selectors.DefaultSelector()
         self.host = host
         self.port = port
+        self.request_handlers = ManageHandlers(settings, self.update_statistics).prepare_handlers()
+        self.client_manager = selectors.DefaultSelector()
         self.statistics = {'bytes_sent':0, 'bytes_recv':0, 'requests_recv':0, 'responses_sent':0}
         # The reason for this set is that every request is handled in its own thread but before
         # the socket is able to be read, control is yeilded to the main thread which picks which sockets are to be read.
