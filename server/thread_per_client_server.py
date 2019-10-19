@@ -1,9 +1,6 @@
 from .base_server import BaseServer
 from typing import Dict
 import socket
-import os, sys
-BASE_DIR = os.path.join( os.path.dirname( __file__ ), '..' )
-sys.path.append(BASE_DIR)
 from utils.general_utils import execute_in_new_thread
 from utils.custom_exceptions import ClientClosingConnection
 
@@ -46,11 +43,8 @@ class PurelyThreadedServer(BaseServer):
         while True:
             try:
                 self.handle_client_request(client)
-            except ClientClosingConnection:
+            except (ClientClosingConnection, socket.timeout):
                 self.close_client_connection(client)
-                break
-            except socket.timeout:
-                #when the socket times out, its automatically closed, so there is no need to close it again.
                 break
         print("ending thread")
 

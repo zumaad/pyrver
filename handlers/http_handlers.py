@@ -3,9 +3,6 @@ from typing import Any, List, Dict, Union, Sequence, Tuple, Callable
 import socket
 import time
 import random
-import os,sys
-BASE_DIR = os.path.join( os.path.dirname( __file__ ), '..' )
-sys.path.append(BASE_DIR)
 from utils.general_utils import HttpRequest, HttpResponse, Range
 
 

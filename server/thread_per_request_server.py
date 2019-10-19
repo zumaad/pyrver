@@ -1,9 +1,6 @@
 import socket
 from typing import Dict
 import selectors
-import os, sys
-BASE_DIR = os.path.join( os.path.dirname( __file__ ), '..' )
-sys.path.append(BASE_DIR)
 from handlers.handler_manager import ManageHandlers
 from handlers.http_handlers import HttpBaseHandler
 from utils.general_utils import ClientInformation, HttpResponse, handle_exceptions, HttpRequest, SocketType, execute_in_new_thread

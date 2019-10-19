@@ -1,8 +1,5 @@
 
 from typing import Dict
-import os, sys
-BASE_DIR = os.path.join( os.path.dirname( __file__ ), '..' )
-sys.path.append(BASE_DIR)
 from handlers.http_handlers import HttpBaseHandler
 from handlers.handler_manager import ManageHandlers
 from utils.general_utils import HttpResponse, handle_exceptions,parse_http_request
