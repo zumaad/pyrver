@@ -171,5 +171,3 @@ def execute_in_new_thread(func, args):
     new_thread.start()
 
 
-class ServerFactory:
-    pass
