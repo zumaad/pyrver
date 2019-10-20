@@ -1,5 +1,6 @@
 
 from typing import Dict
+import socket
 from handlers.http_handlers import HttpBaseHandler
 from handlers.handler_manager import ManageHandlers
 from utils.general_utils import HttpResponse, handle_exceptions,parse_http_request
@@ -14,6 +15,14 @@ class BaseServer(ABC):
         self.request_handlers = ManageHandlers(settings, self.update_statistics).prepare_handlers()
         self.statistics = {'bytes_sent':0, 'bytes_recv':0, 'requests_recv':0, 'responses_sent':0}
         print(f'listening on port {self.port}')
+    
+    def init_master_socket(self):
+        master_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        master_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        master_socket.bind((self.host, self.port))
+        master_socket.listen()
+        self.master_socket = master_socket
+        
 
     def update_statistics(self, **statistics) -> None:
         for statistic_name, statistic_value in statistics.items():
@@ -87,6 +96,14 @@ class BaseServer(ABC):
                 break
         else:
             self.on_no_compatible_handler(client_socket)
+    
+    def start_loop(self) -> None:
+        self.init_master_socket()
+        self.loop_forever()
+    
+    def stop_loop(self) -> None:
+        self.master_socket.close()
+        print(self.statistics)
 
     @abstractmethod
     def on_no_received_data(self, client_socket) -> None:
@@ -95,6 +112,15 @@ class BaseServer(ABC):
     @abstractmethod
     def close_client_connection(self, client_socket) -> None:
         pass
+    
+    @abstractmethod
+    def loop_forever(self) -> None:
+        pass
+     
+
+
+
+ 
 
     
     
