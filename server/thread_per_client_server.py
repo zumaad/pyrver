@@ -24,6 +24,9 @@ class PurelyThreadedServer(BaseServer):
         execute_in_new_thread(self.handle_client, (new_client,))
         
     def handle_client(self, client):
+        """
+
+        """
         while True:
             try:
                 self.handle_client_request(client)
@@ -33,6 +36,11 @@ class PurelyThreadedServer(BaseServer):
         print("ending thread")
 
     def on_no_received_data(self, client_socket):
+        """
+        This is executed when the client sends an empty byte string (b''). This means the client is closing its side of the connection. This
+        method raises an exception so that it can be caught in the method that calls this method and the while true loop can be broken out of to
+        end the thread.
+        """
         self.close_client_connection(client_socket)
         raise ClientClosingConnection("client is closing connection. Thread should be terminated.")
             

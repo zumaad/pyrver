@@ -31,14 +31,6 @@ class Server(BaseServer):
         new_client_socket.setblocking(False)
         self.client_manager.register(new_client_socket, selectors.EVENT_READ, data = ClientInformation(addr,SocketType.CLIENT_SOCKET))
 
-    def on_received_data(self, client_socket, raw_data):
-        super().on_received_data(client_socket, raw_data)
-        self.clients_currently_being_serviced.remove(client_socket)
-    
-    def on_no_received_data(self, client_socket):
-        self.close_client_connection(client_socket)
-        self.clients_currently_being_serviced.remove(client_socket)
-
     def close_client_connection(self, client_socket) -> None:
         self.client_manager.unregister(client_socket)
         client_socket.close()      
@@ -48,6 +40,7 @@ class Server(BaseServer):
             self.handle_client_request(client_socket)
         except (ClientClosingConnection, socket.timeout, ConnectionResetError, TimeoutError, BrokenPipeError):
             self.close_client_connection(client_socket)
+        self.clients_currently_being_serviced.remove(client_socket)
  
     def loop_forever(self) -> None:
         while True:
@@ -60,4 +53,3 @@ class Server(BaseServer):
                     if client_socket not in self.clients_currently_being_serviced:
                         self.clients_currently_being_serviced.add(client_socket)
                         execute_in_new_thread(self.handle_client_request,(client_socket,))
-                    

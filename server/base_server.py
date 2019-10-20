@@ -23,12 +23,6 @@ class BaseServer(ABC):
         master_socket.listen()
         self.master_socket = master_socket
         
-    def update_statistics(self, **statistics) -> None:
-        for statistic_name, statistic_value in statistics.items():
-            if statistic_name in self.statistics:
-                self.statistics[statistic_name] += statistic_value
-            else:
-                self.statistics[statistic_name] = statistic_value
 
     def send_all(self, client_socket, response: bytes) -> None:
         """ 
@@ -79,6 +73,13 @@ class BaseServer(ABC):
     def stop_loop(self) -> None:
         self.master_socket.close()
         print(self.statistics)
+    
+    def update_statistics(self, **statistics) -> None:
+        for statistic_name, statistic_value in statistics.items():
+            if statistic_name in self.statistics:
+                self.statistics[statistic_name] += statistic_value
+            else:
+                self.statistics[statistic_name] = statistic_value
 
     @abstractmethod
     def on_no_received_data(self, client_socket) -> None:
@@ -90,4 +91,8 @@ class BaseServer(ABC):
     
     @abstractmethod
     def loop_forever(self) -> None:
+        pass
+
+    @abstractmethod
+    def handle_client(self, client) -> None:
         pass
