@@ -7,7 +7,7 @@ from handlers.http_handlers import HttpBaseHandler
 from utils.general_utils import ClientInformation, HttpResponse, handle_exceptions, HttpRequest, SocketType, execute_in_new_thread
 from utils.custom_exceptions import ClientClosingConnection
 
-class Server(BaseServer):
+class ThreadPerRequest(BaseServer):
     """
     This implementation of the server creates a new thread for every request, but the clients
     themselves are not given their own threads.
@@ -24,16 +24,25 @@ class Server(BaseServer):
     def init_master_socket(self) -> None:
         super().init_master_socket()
         self.master_socket.setblocking(False)
-        self.client_manager.register(self.master_socket, selectors.EVENT_READ, data=ClientInformation(None,SocketType.MASTER_SOCKET))
+        self.client_manager.register(self.master_socket, selectors.EVENT_READ, data=ClientInformation(SocketType.MASTER_SOCKET))
+    
+    def loop_forever(self) -> None:
+        while True:
+            ready_sockets = self.client_manager.select()
+            for socket_wrapper, events in ready_sockets:
+                if socket_wrapper.data.socket_type == SocketType.MASTER_SOCKET:
+                    master_socket = socket_wrapper.fileobj
+                    new_client_socket, addr = master_socket.accept()
+                    self.accept_new_client(new_client_socket)
+                elif socket_wrapper.data.socket_type == SocketType.CLIENT_SOCKET:
+                    client_socket = socket_wrapper.fileobj
+                    if client_socket not in self.clients_currently_being_serviced:
+                        self.clients_currently_being_serviced.add(client_socket)
+                        execute_in_new_thread(self.handle_client,(client_socket,))
         
-    def accept_new_client(self, master_socket) -> None:
-        new_client_socket, addr = master_socket.accept()
-        new_client_socket.setblocking(False)
-        self.client_manager.register(new_client_socket, selectors.EVENT_READ, data = ClientInformation(addr,SocketType.CLIENT_SOCKET))
-
-    def close_client_connection(self, client_socket) -> None:
-        self.client_manager.unregister(client_socket)
-        client_socket.close()      
+    def accept_new_client(self, new_client) -> None:
+        new_client.setblocking(False)
+        self.client_manager.register(new_client, selectors.EVENT_READ, data = ClientInformation(socket_type=SocketType.CLIENT_SOCKET))
     
     def handle_client(self, client_socket):
         try:
@@ -41,15 +50,7 @@ class Server(BaseServer):
         except (ClientClosingConnection, socket.timeout, ConnectionResetError, TimeoutError, BrokenPipeError):
             self.close_client_connection(client_socket)
         self.clients_currently_being_serviced.remove(client_socket)
- 
-    def loop_forever(self) -> None:
-        while True:
-            ready_sockets = self.client_manager.select()
-            for socket_wrapper, events in ready_sockets:
-                if socket_wrapper.data.socket_type == SocketType.MASTER_SOCKET:
-                    self.accept_new_client(socket_wrapper.fileobj)
-                elif socket_wrapper.data.socket_type == SocketType.CLIENT_SOCKET:
-                    client_socket = socket_wrapper.fileobj
-                    if client_socket not in self.clients_currently_being_serviced:
-                        self.clients_currently_being_serviced.add(client_socket)
-                        execute_in_new_thread(self.handle_client_request,(client_socket,))
+
+    def close_client_connection(self, client_socket) -> None:
+        self.client_manager.unregister(client_socket)
+        client_socket.close()      

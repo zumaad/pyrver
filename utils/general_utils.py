@@ -10,7 +10,7 @@ class SocketType(Enum):
     CLIENT_SOCKET = 2
 
 class ClientInformation:
-    def __init__(self, addr: Union[str, int, None], socket_type: SocketType):
+    def __init__(self, socket_type: SocketType, addr: Union[str, int, None] =""):
         self.addr = addr
         self.socket_type = socket_type
 
@@ -169,5 +169,3 @@ def execute_in_new_thread(func, args):
     new_thread = threading.Thread(target = func, args = args)
     new_thread.daemon = True
     new_thread.start()
-
-

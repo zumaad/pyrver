@@ -4,6 +4,7 @@ import socket
 from handlers.http_handlers import HttpBaseHandler
 from handlers.handler_manager import ManageHandlers
 from utils.general_utils import HttpResponse, handle_exceptions,parse_http_request
+from utils.custom_exceptions import ClientClosingConnection
 from abc import ABC, abstractmethod
 
 
@@ -23,7 +24,6 @@ class BaseServer(ABC):
         master_socket.listen()
         self.master_socket = master_socket
         
-
     def send_all(self, client_socket, response: bytes) -> None:
         """ 
         I can't just use the sendall method on the socket object because it throws an error when it can't send
@@ -49,7 +49,7 @@ class BaseServer(ABC):
         #clients (such as browsers) will send an empty message when they are closing
         #their side of the connection.
         if not raw_request: 
-            self.on_no_received_data(client_socket)  
+           raise ClientClosingConnection("client is closing its side of the connection, clean up connection")
         else:
             self.on_received_data(client_socket, raw_request)
 
@@ -82,10 +82,6 @@ class BaseServer(ABC):
                 self.statistics[statistic_name] = statistic_value
 
     @abstractmethod
-    def on_no_received_data(self, client_socket) -> None:
-        pass
-
-    @abstractmethod
     def close_client_connection(self, client_socket) -> None:
         pass
     
@@ -95,4 +91,8 @@ class BaseServer(ABC):
 
     @abstractmethod
     def handle_client(self, client) -> None:
+        pass
+
+    @abstractmethod
+    def accept_new_client(self, new_client) -> None:
         pass
