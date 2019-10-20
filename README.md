@@ -1,5 +1,6 @@
-
-![logo](static/images/pyrverlogo.png)
+<p align="center">
+  <img src = "https://github.com/zumaad/pyrver/blob/master/static/images/pyrverlogo.png" />
+</p>
 
 (i made a logo because there isn't anything visual about this project)
 
