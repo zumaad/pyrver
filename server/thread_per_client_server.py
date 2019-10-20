@@ -17,6 +17,7 @@ class PurelyThreadedServer(BaseServer):
             self.accept_new_client(new_client)
 
     def accept_new_client(self, new_client):
+        print("Accepting new client")
         #if client is idle for this long, an error should be raised and should signal closing
         #the connection
         new_client.settimeout(10) 
@@ -26,7 +27,8 @@ class PurelyThreadedServer(BaseServer):
         while True:
             try:
                 self.handle_client_request(client)
-            except (ClientClosingConnection, socket.timeout):
+            except (ClientClosingConnection, socket.timeout, ConnectionResetError, TimeoutError, BrokenPipeError):
+                self.close_client_connection(client)
                 break
         print("ending thread")
 

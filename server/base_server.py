@@ -23,7 +23,6 @@ class BaseServer(ABC):
         master_socket.listen()
         self.master_socket = master_socket
         
-
     def update_statistics(self, **statistics) -> None:
         for statistic_name, statistic_value in statistics.items():
             if statistic_name in self.statistics:
@@ -32,11 +31,13 @@ class BaseServer(ABC):
                 self.statistics[statistic_name] = statistic_value
 
     def send_all(self, client_socket, response: bytes) -> None:
-        """ I can't just use the sendall method on the socket object because it throws an error when it can't send
-            all the bytes for whatever reason (typically other socket isn't ready for reading i guess) and you can't just catch
-            the error and try again because you have no clue how many bytes were actually written. However, using the send
-            method gives you much finer control as it returns how many bytes were written, so if all the bytes couldn't be written
-            you can truncate your message accordingly and repeat.  """
+        """ 
+        I can't just use the sendall method on the socket object because it throws an error when it can't send
+        all the bytes for whatever reason (typically other socket isn't ready for reading i guess) and you can't just catch
+        the error and try again because you have no clue how many bytes were actually written. However, using the send
+        method gives you much finer control as it returns how many bytes were written, so if all the bytes couldn't be written
+        you can truncate your message accordingly and repeat.  
+        """
         BUFFER_SIZE = 1024 * 16
         while response:
             try:
@@ -45,40 +46,12 @@ class BaseServer(ABC):
                     response = response[bytes_sent:]
                 else:
                     response = response[BUFFER_SIZE:]
-            #for when client unexpectedly drops connection, chrome does this when serving large files as it will make
-            #two requests and drop the first one's connection thus resulting in this error. idk why it does that, maybe
-            #i am misinterpreting something.
-            except BrokenPipeError: 
-                self.close_client_connection(client_socket)
-                break
             except BlockingIOError: 
-                print("closing connection on blocking io error")
-                #DON'T THINK I SHOULD DO THIS, should just continue as client's buffer could be full, so just put pass
-                self.close_client_connection(client_socket)
-                break
+                continue
 
-    def on_compatible_handler(self, client_socket, handler: HttpBaseHandler) -> None:
-        """
-        Handles dealing with client when there is a handler that can handle the http request, meaning that
-        the http request matches atleast one of the match criteria for the tasks defined in settings.py
-        """
-        http_response = handler.handle_request()
-        self.send_all(client_socket, http_response)
-
-    def on_no_compatible_handler(self, client_socket) -> None:
-        """
-        Handles dealing with the client when there is no handler that can handle the http request, meaning
-        that the http request did not match any of the match criteria for any of the tasks in settings.py
-        """
-        http_error_response = HttpResponse(400, 'No handler could handle your request, check the matching criteria in settings.py').dump()
-        self.send_all(client_socket, http_error_response)
-    
     def handle_client_request(self, client_socket) -> None:
         raw_request = None 
-        try:
-            raw_request = client_socket.recv(1024)
-        except (ConnectionResetError, TimeoutError) as e: 
-            handle_exceptions(e)
+        raw_request = client_socket.recv(1024)
         #clients (such as browsers) will send an empty message when they are closing
         #their side of the connection.
         if not raw_request: 
@@ -92,10 +65,12 @@ class BaseServer(ABC):
         for handler in self.request_handlers:
             if handler.should_handle(http_request):
                 handler.raw_http_request = raw_data
-                self.on_compatible_handler(client_socket, handler)
+                http_response = handler.handle_request()
+                self.send_all(client_socket, http_response)
                 break
         else:
-            self.on_no_compatible_handler(client_socket)
+            http_error_response = HttpResponse(400, 'No handler could handle your request, check the matching criteria in settings.py').dump()
+            self.send_all(client_socket, http_error_response)
     
     def start_loop(self) -> None:
         self.init_master_socket()
@@ -116,11 +91,3 @@ class BaseServer(ABC):
     @abstractmethod
     def loop_forever(self) -> None:
         pass
-     
-
-
-
- 
-
-    
-    
