@@ -1,5 +1,8 @@
 
 ![logo](static/images/pyrverlogo.png)
+
+(i made a logo because there isn't anything visual about this project)
+
 This is an http server written in python using the lowest level networking library (I think) so I could try building an http server "from scatch".
 
 The server should be able to accept http requests and give back http responses, all adhering to the http spec so that any client (like a browser) can communicate with it.
