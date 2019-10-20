@@ -3,15 +3,17 @@ from typing import Dict
 from handlers.http_handlers import HttpBaseHandler
 from handlers.handler_manager import ManageHandlers
 from utils.general_utils import HttpResponse, handle_exceptions,parse_http_request
+from abc import ABC, abstractmethod
 
 
-class BaseServer:
+class BaseServer(ABC):
 
     def __init__(self, settings: Dict, host: str = '0.0.0.0', port: int = 9999):
         self.host = host
         self.port = port
         self.request_handlers = ManageHandlers(settings, self.update_statistics).prepare_handlers()
         self.statistics = {'bytes_sent':0, 'bytes_recv':0, 'requests_recv':0, 'responses_sent':0}
+        print(f'listening on port {self.port}')
 
     def update_statistics(self, **statistics) -> None:
         for statistic_name, statistic_value in statistics.items():
@@ -86,6 +88,13 @@ class BaseServer:
         else:
             self.on_no_compatible_handler(client_socket)
 
-    def on_no_received_data(self, client_socket):
-        print("closing client connection!")
-        self.close_client_connection(client_socket)
+    @abstractmethod
+    def on_no_received_data(self, client_socket) -> None:
+        pass
+
+    @abstractmethod
+    def close_client_connection(self, client_socket) -> None:
+        pass
+
+    
+    

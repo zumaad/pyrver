@@ -18,7 +18,6 @@ class PurelyThreadedServer(BaseServer):
         master_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         master_socket.bind((self.host, self.port))
         master_socket.listen()
-        # master_socket.setblocking(False)
         self.master_socket = master_socket
 
     def start_loop(self):
