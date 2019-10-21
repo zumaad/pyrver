@@ -5,7 +5,7 @@ from handlers.handler_manager import ManageHandlers
 from .base_server import BaseServer
 from handlers.http_handlers import HttpBaseHandler
 from utils.general_utils import ClientInformation, HttpResponse, handle_exceptions, HttpRequest, SocketType, execute_in_new_thread
-from utils.custom_exceptions import ClientClosingConnection
+from utils.custom_exceptions import ClientClosingConnection, NotValidHttpFormat
 
 class ThreadPerRequest(BaseServer):
     """
@@ -48,6 +48,9 @@ class ThreadPerRequest(BaseServer):
         try:
             self.handle_client_request(client_socket)
         except (ClientClosingConnection, socket.timeout, ConnectionResetError, TimeoutError, BrokenPipeError):
+            self.close_client_connection(client_socket)
+        except NotValidHttpFormat:
+            self.send_all(client_socket, b'This server only responds to http requests')
             self.close_client_connection(client_socket)
         self.clients_currently_being_serviced.remove(client_socket)
 

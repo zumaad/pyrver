@@ -2,7 +2,7 @@ from .base_server import BaseServer
 from typing import Dict
 import socket
 from utils.general_utils import execute_in_new_thread
-from utils.custom_exceptions import ClientClosingConnection
+from utils.custom_exceptions import ClientClosingConnection,NotValidHttpFormat
 
 
 class ThreadPerClient(BaseServer):
@@ -27,9 +27,12 @@ class ThreadPerClient(BaseServer):
         while True:
             try:
                 self.handle_client_request(client)
-            except (ClientClosingConnection, socket.timeout, ConnectionResetError, TimeoutError, BrokenPipeError):
+            except (ClientClosingConnection, NotValidHttpFormat, socket.timeout, ConnectionResetError, TimeoutError, BrokenPipeError):
                 self.close_client_connection(client)
                 break
+            except NotValidHttpFormat:
+                self.send_all(client, b'This server only responds to http requests')
+                self.close_client_connection(client)
         print("ending thread")
             
     def close_client_connection(self, client_socket) -> None:

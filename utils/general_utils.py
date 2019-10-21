@@ -4,6 +4,7 @@ import logging
 import datetime
 import json
 import threading
+from .custom_exceptions import NotValidHttpFormat
 
 class SocketType(Enum):
     MASTER_SOCKET = 1
@@ -50,11 +51,15 @@ class HttpRequest:
     
     @classmethod
     def from_bytes(cls, raw_http_request: bytes) -> 'HttpRequest':
-        http_request_lines = raw_http_request.decode().split('\r\n')
-        method,requested_url = http_request_lines[0].split()[:2] #the first two words on the first line of the request
-        headers = {header.split(': ')[0]:header.split(': ')[1] for header in http_request_lines[1:-2]}
-        payload = http_request_lines[-1]
-        return cls(method, requested_url, headers, payload)
+        print(raw_http_request)
+        try:
+            http_request_lines = raw_http_request.decode().split('\r\n')
+            method, requested_url, request_type= http_request_lines[0].split()
+            headers = {header.split(': ')[0]:header.split(': ')[1] for header in http_request_lines[1:-2]}
+            payload = http_request_lines[-1]
+            return cls(method, requested_url, headers, payload)
+        except:
+            raise NotValidHttpFormat("bytes don't follow http spec")
 
     def __repr__(self) -> str:
         return str(vars(self))

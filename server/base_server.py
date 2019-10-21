@@ -3,7 +3,7 @@ from typing import Dict
 import socket
 from handlers.http_handlers import HttpBaseHandler
 from handlers.handler_manager import ManageHandlers
-from utils.general_utils import HttpResponse, handle_exceptions,parse_http_request
+from utils.general_utils import HttpResponse, HttpRequest, handle_exceptions
 from utils.custom_exceptions import ClientClosingConnection
 from abc import ABC, abstractmethod
 
@@ -54,18 +54,27 @@ class BaseServer(ABC):
             self.on_received_data(client_socket, raw_request)
 
     def on_received_data(self, client_socket, raw_data):
-        http_request = parse_http_request(raw_data)
+        parsed_data = self.parse_raw_data(raw_data)
         self.update_statistics(responses_sent=1, requests_recv=1)
         for handler in self.request_handlers:
-            if handler.should_handle(http_request):
-                handler.raw_http_request = raw_data
-                http_response = handler.handle_request()
-                self.send_all(client_socket, http_response)
+            if handler.should_handle(parsed_data):
+                self.when_compatible_handler(client_socket, handler, raw_data)
                 break
         else:
-            http_error_response = HttpResponse(400, 'No handler could handle your request, check the matching criteria in settings.py').dump()
-            self.send_all(client_socket, http_error_response)
+            self.when_no_compatible_handler(client_socket)
     
+    def parse_raw_data(self, raw_data):
+        return HttpRequest.from_bytes(raw_data)
+    
+    def when_compatible_handler(self, client_socket, handler, raw_data):
+        handler.raw_http_request = raw_data
+        http_response = handler.handle_request()
+        self.send_all(client_socket, http_response)
+
+    def when_no_compatible_handler(self, client_socket):
+        http_error_response = HttpResponse(400, 'No handler could handle your request, check the matching criteria in settings.py').dump()
+        self.send_all(client_socket, http_error_response)
+
     def start_loop(self) -> None:
         self.init_master_socket()
         self.loop_forever()
