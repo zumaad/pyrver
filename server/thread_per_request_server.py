@@ -46,7 +46,7 @@ class ThreadPerRequest(BaseServer):
                 elif socket_wrapper.data.socket_type == SocketType.CLIENT_SOCKET:
                     client_socket = socket_wrapper.fileobj
                     # print(client_socket in self.clients_currently_being_serviced)
-                    # print(client_socket)
+                    print(client_socket)
                     if client_socket not in self.clients_currently_being_serviced and not client_socket._closed:
                         self.clients_currently_being_serviced.add(client_socket)
                         self.clients_to_be_serviced.put(client_socket)
@@ -72,6 +72,9 @@ class ThreadPerRequest(BaseServer):
                 # raise Exception
                 print("closing client!!!!!!")
                 self.close_client_connection(client_socket)
+            except BlockingIOError:
+                pass
+            
             print("removing client")
             self.clients_currently_being_serviced.remove(client_socket)
 
