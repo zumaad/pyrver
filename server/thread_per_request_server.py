@@ -36,7 +36,8 @@ class ThreadPerRequest(BaseServer):
                     self.accept_new_client(new_client_socket)
                 elif socket_wrapper.data.socket_type == SocketType.CLIENT_SOCKET:
                     client_socket = socket_wrapper.fileobj
-                    if client_socket not in self.clients_currently_being_serviced:
+                    print(client_socket)
+                    if client_socket not in self.clients_currently_being_serviced and not client_socket._closed:
                         self.clients_currently_being_serviced.add(client_socket)
                         execute_in_new_thread(self.handle_client,(client_socket,))
                         # self.handle_client(client_socket)
