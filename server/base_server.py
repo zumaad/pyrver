@@ -18,6 +18,9 @@ class BaseServer(ABC):
         print(f'listening on port {self.port}')
     
     def init_master_socket(self):
+        """ 
+        Every server will have some concept of a socket that listens for connections 
+        """
         master_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         master_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         master_socket.bind((self.host, self.port))
@@ -44,6 +47,8 @@ class BaseServer(ABC):
                 continue
 
     def handle_client_request(self, client_socket) -> None:
+        """ every server should have a way to handle a client's request """
+
         raw_request = None 
         raw_request = client_socket.recv(1024)
         #clients (such as browsers) will send an empty message when they are closing

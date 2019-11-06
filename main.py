@@ -4,6 +4,7 @@ import argparse
 import json
 from server.thread_per_client_server import ThreadPerClient
 from server.thread_per_request_server import ThreadPerRequest
+from server.purely_sync_server import PurelySync
 from utils.general_utils import settings_analyzer,settings_preparer
 from settings import settings_map
 
@@ -22,11 +23,15 @@ def main() -> None:
     type_to_server_mapping = {
         '1':ThreadPerClient,
         '2':ThreadPerRequest,
+        '3':PurelySync,
         'ThreadPerClient':ThreadPerClient,
         'ThreadPerRequest':ThreadPerRequest,
+        'PurelySync':PurelySync,
         'tpc':ThreadPerClient,
-        'tpr':ThreadPerRequest
+        'tpr':ThreadPerRequest,
+        'ps':PurelySync
     }
+    
     settings = settings_analyzer(settings_preparer(settings_map[args.settings]))
     server_impl = type_to_server_mapping[args.type]
     print(json.dumps(settings,default=str,sort_keys=True, indent=2))

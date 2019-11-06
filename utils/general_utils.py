@@ -11,9 +11,10 @@ class SocketType(Enum):
     CLIENT_SOCKET = 2
 
 class ClientInformation:
-    def __init__(self, socket_type: SocketType, addr: Union[str, int, None] =""):
+    def __init__(self, socket_type: SocketType, addr: Union[str, int, None] ="", context= None):
         self.addr = addr
         self.socket_type = socket_type
+        self.context = context
 
 class HttpRequest:
     def __init__(self, request_type: str, requested_url: str, headers: Dict, payload: str):
@@ -51,26 +52,16 @@ class HttpRequest:
     
     @classmethod
     def from_bytes(cls, raw_http_request: bytes) -> 'HttpRequest':
-        print(raw_http_request)
-        try:
-            http_request_lines = raw_http_request.decode().split('\r\n')
-            method, requested_url, request_type= http_request_lines[0].split()
-            headers = {header.split(': ')[0]:header.split(': ')[1] for header in http_request_lines[1:-2]}
-            payload = http_request_lines[-1]
-            return cls(method, requested_url, headers, payload)
-        except:
-            raise NotValidHttpFormat("bytes don't follow http spec")
+        # print(raw_http_request)
+        http_request_lines = raw_http_request.decode().split('\r\n')
+        method, requested_url, request_type= http_request_lines[0].split()
+        headers = {header.split(': ')[0]:header.split(': ')[1] for header in http_request_lines[1:-2]}
+        payload = http_request_lines[-1]
+        return cls(method, requested_url, headers, payload)
+    
 
     def __repr__(self) -> str:
         return str(vars(self))
-
-
-def parse_http_request(raw_http_request: bytes) -> HttpRequest:
-    http_request_lines = raw_http_request.decode().split('\r\n')
-    method,requested_url = http_request_lines[0].split()[:2] #the first two words on the first line of the request
-    headers = {header.split(': ')[0]:header.split(': ')[1] for header in http_request_lines[1:-2]}
-    payload = http_request_lines[-1]
-    return HttpRequest(method, requested_url, headers, payload)
 
 def settings_parser() -> Dict:
     with open("settings.json",'r') as settings:

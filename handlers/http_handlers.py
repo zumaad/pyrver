@@ -96,6 +96,7 @@ class ReverseProxyHandler(HttpBaseHandler):
         
     def connect_and_send(self, remote_host: str, remote_port: int) -> bytes:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as remote_server:
+            remote_server.settimeout(15)
             remote_server.connect((remote_host,int(remote_port)))
             remote_server.sendall(self.raw_http_request)
             data = remote_server.recv(1024)

@@ -20,7 +20,7 @@ class ThreadPerClient(BaseServer):
         print("Accepting new client")
         #if client is idle for this long, an error should be raised and should signal closing
         #the connection
-        new_client.settimeout(10) 
+        new_client.settimeout(3) 
         execute_in_new_thread(self.handle_client, (new_client,))
         
     def handle_client(self, client):
