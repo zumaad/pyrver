@@ -50,6 +50,7 @@ class BaseServer(ABC):
         """ every server should have a way to handle a client's request """
 
         raw_request = None 
+        print("Attempting to read!!!")
         raw_request = client_socket.recv(1024)
         #clients (such as browsers) will send an empty message when they are closing
         #their side of the connection.

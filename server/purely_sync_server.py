@@ -12,7 +12,6 @@ class PurelySync(BaseServer):
     def __init__(self, settings: Dict, host: str = '0.0.0.0', port: int = 9999):
         super().__init__(settings, host, port)
         self.client_manager = selectors.KqueueSelector()
-        # self.clients_currently_being_serviced = set() 
     
     def init_master_socket(self) -> None:
         super().init_master_socket()
@@ -22,14 +21,15 @@ class PurelySync(BaseServer):
     def loop_forever(self) -> None:
         while True:
             ready_sockets = self.client_manager.select()
+            print("After select call")
             for socket_wrapper, events in ready_sockets:
                 if socket_wrapper.data.socket_type == SocketType.MASTER_SOCKET:
                     master_socket = socket_wrapper.fileobj
                     new_client_socket, addr = master_socket.accept()
                     self.accept_new_client(new_client_socket)
                 elif socket_wrapper.data.socket_type == SocketType.CLIENT_SOCKET:
+                    print("sockettt")
                     client_socket = socket_wrapper.fileobj
-                    # if client_socket not in self.clients_currently_being_serviced:
                     if events & selectors.EVENT_READ:
                         self.handle_client(client_socket)
                     elif events & selectors.EVENT_WRITE:
@@ -70,8 +70,7 @@ class PurelySync(BaseServer):
             self.handle_client_request(client_socket)
         except (ClientClosingConnection, socket.timeout, ConnectionResetError, TimeoutError, BrokenPipeError):
             self.close_client_connection(client_socket)
-        # self.clients_currently_being_serviced.remove(client_socket)
-
+    
     def close_client_connection(self, client_socket) -> None:
         self.client_manager.unregister(client_socket)
         client_socket.close() 
