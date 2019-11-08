@@ -24,14 +24,13 @@ class ThreadPerRequest(BaseServer):
         self.clients_currently_being_serviced = set() 
         self.clients_to_be_serviced = Queue()
 
-    
     def init_master_socket(self) -> None:
         super().init_master_socket()
         self.master_socket.setblocking(False)
         self.client_manager.register(self.master_socket, selectors.EVENT_READ, data=ClientInformation(SocketType.MASTER_SOCKET))
     
     def start_threads(self):
-        for _ in range(5):
+        for _ in range(50):
             threading.Thread(target=self.handle_client).start()
 
     def loop_forever(self) -> None:
@@ -40,21 +39,15 @@ class ThreadPerRequest(BaseServer):
             ready_sockets = self.client_manager.select()
             for socket_wrapper, events in ready_sockets:
                 if socket_wrapper.data.socket_type == SocketType.MASTER_SOCKET:
+                    #wonder if i should put this in the queue too
                     master_socket = socket_wrapper.fileobj
                     new_client_socket, addr = master_socket.accept()
                     self.accept_new_client(new_client_socket)
                 elif socket_wrapper.data.socket_type == SocketType.CLIENT_SOCKET:
                     client_socket = socket_wrapper.fileobj
-                    # print(client_socket in self.clients_currently_being_serviced)
-                    print(client_socket)
                     if client_socket not in self.clients_currently_being_serviced and not client_socket._closed:
                         self.clients_currently_being_serviced.add(client_socket)
                         self.clients_to_be_serviced.put(client_socket)
-                        print("put client!!")
-                        
-                        # execute_in_new_thread(self.handle_client,(client_socket,))
-                        # self.handle_client(client_socket)
-                        # execute_in_new_thread(self.handle_client,(client_socket,))
         
     def accept_new_client(self, new_client) -> None:
         new_client.setblocking(False)
@@ -63,19 +56,13 @@ class ThreadPerRequest(BaseServer):
     def handle_client(self):
         while True:
             client_socket = self.clients_to_be_serviced.get()
-            print("After get")
-            print(client_socket)
-
             try:
                 self.handle_client_request(client_socket)
             except (ClientClosingConnection, socket.timeout, ConnectionResetError, TimeoutError, BrokenPipeError):
-                # raise Exception
-                print("closing client!!!!!!")
                 self.close_client_connection(client_socket)
             except BlockingIOError:
+                #client has already been exhausted by another thread
                 pass
-            
-            print("removing client")
             self.clients_currently_being_serviced.remove(client_socket)
 
     def close_client_connection(self, client_socket) -> None:

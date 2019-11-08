@@ -17,7 +17,6 @@ class ThreadPerClient(BaseServer):
             self.accept_new_client(new_client)
 
     def accept_new_client(self, new_client):
-        print("Accepting new client")
         #if client is idle for this long, an error should be raised and should signal closing
         #the connection
         new_client.settimeout(3) 
@@ -30,10 +29,6 @@ class ThreadPerClient(BaseServer):
             except (ClientClosingConnection, NotValidHttpFormat, socket.timeout, ConnectionResetError, TimeoutError, BrokenPipeError):
                 self.close_client_connection(client)
                 break
-            except NotValidHttpFormat:
-                self.send_all(client, b'This server only responds to http requests')
-                self.close_client_connection(client)
-        print("ending thread")
             
     def close_client_connection(self, client_socket) -> None:
         print("closing connection!")

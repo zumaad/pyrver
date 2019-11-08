@@ -21,14 +21,12 @@ class PurelySync(BaseServer):
     def loop_forever(self) -> None:
         while True:
             ready_sockets = self.client_manager.select()
-            print("After select call")
             for socket_wrapper, events in ready_sockets:
                 if socket_wrapper.data.socket_type == SocketType.MASTER_SOCKET:
                     master_socket = socket_wrapper.fileobj
                     new_client_socket, addr = master_socket.accept()
                     self.accept_new_client(new_client_socket)
                 elif socket_wrapper.data.socket_type == SocketType.CLIENT_SOCKET:
-                    print("sockettt")
                     client_socket = socket_wrapper.fileobj
                     if events & selectors.EVENT_READ:
                         self.handle_client(client_socket)
@@ -62,7 +60,6 @@ class PurelySync(BaseServer):
                 self.client_manager.register(client_socket, selectors.EVENT_WRITE, data = ClientInformation(
                     socket_type=SocketType.CLIENT_SOCKET,
                     context = response[bytes_sent:]))
-                print("blocking io error")
                 break
     
     def handle_client(self, client_socket):
