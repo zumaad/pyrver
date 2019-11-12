@@ -29,7 +29,7 @@ class ThreadPerRequest(BaseServer):
         self.client_manager.register(self.master_socket, selectors.EVENT_READ, data=ClientInformation(SocketType.MASTER_SOCKET))
     
     def start_threads(self):
-        for _ in range(10):
+        for _ in range(50):
             threading.Thread(target=self.handle_client).start()
 
     def loop_forever(self) -> None:
@@ -49,7 +49,6 @@ class ThreadPerRequest(BaseServer):
                         self.clients_to_be_serviced.put(client_socket)
         
     def accept_new_client(self, new_client) -> None:
-        new_client.settimeout(1)
         self.client_manager.register(new_client, selectors.EVENT_READ, data = ClientInformation(socket_type=SocketType.CLIENT_SOCKET))
     
     def handle_client(self):
@@ -59,9 +58,7 @@ class ThreadPerRequest(BaseServer):
                 self.handle_client_request(client_socket)
             except (ClientClosingConnection, socket.timeout, ConnectionResetError, TimeoutError, BrokenPipeError):
                 self.close_client_connection(client_socket)
-            except BlockingIOError:
-                #client has already been exhausted by another thread, multithreading problems.
-                pass
+    
             self.clients_currently_being_serviced.remove(client_socket)
 
     def close_client_connection(self, client_socket) -> None:
