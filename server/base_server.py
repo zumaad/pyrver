@@ -9,6 +9,9 @@ from abc import ABC, abstractmethod
 
 
 class BaseServer(ABC):
+    """
+
+    """
 
     def __init__(self, settings: Dict, host: str = '0.0.0.0', port: int = 9999):
         self.host = host
@@ -47,8 +50,17 @@ class BaseServer(ABC):
                 continue
 
     def handle_client_request(self, client_socket) -> None:
-        """ every server should have a way to handle a client's request """
+        """
+        every server should have a way to handle a client's request, there are generally two possibilities:
+        1. the client sends an empty message (when they disconnect)
+        2. the client sends some data that should be parsed.
 
+        the reason on_received_data is is its on method instead of bieng stuck in here as its pretty small is
+        because i can imagine that diff server implementation want to handle the received data differently. This way,
+        if thats the case, they can still inherit handle_client_request and override on_received_data instead of having
+        to override handle_client_request and have to reimplement a lot more
+        
+         """
         raw_request = None 
         raw_request = client_socket.recv(1024)
         #clients (such as browsers) will send an empty message when they are closing
@@ -60,7 +72,6 @@ class BaseServer(ABC):
 
     def on_received_data(self, client_socket, raw_data):
         parsed_data = self.parse_raw_data(raw_data)
-        self.update_statistics(responses_sent=1, requests_recv=1)
         for handler in self.request_handlers:
             if handler.should_handle(parsed_data):
                 self.when_compatible_handler(client_socket, handler, raw_data)

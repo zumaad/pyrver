@@ -165,3 +165,10 @@ def execute_in_new_thread(func, args):
     new_thread = threading.Thread(target = func, args = args)
     new_thread.daemon = True
     new_thread.start()
+
+
+def send_all_no_block():
+    pass
+
+def recv_all_no_block():
+    pass
