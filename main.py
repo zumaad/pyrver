@@ -16,6 +16,7 @@ logging.basicConfig(filename='server.log',
 parser = argparse.ArgumentParser()
 parser.add_argument('--settings','-s',type=int)
 parser.add_argument('--type','-t',type=str)
+parser.add_argument('--port','-p',type=int,default=9999)
 args = parser.parse_args() 
 
 
@@ -31,11 +32,11 @@ def main() -> None:
         'tpr':ThreadPerRequest,
         'ps':PurelySync
     }
-    
+
     settings = settings_analyzer(settings_preparer(settings_map[args.settings]))
     server_impl = type_to_server_mapping[args.type]
     print(json.dumps(settings,default=str,sort_keys=True, indent=2))
-    server = server_impl(settings)
+    server = server_impl(settings,port=args.port)
     try:
         server.start_loop()
     except KeyboardInterrupt:
