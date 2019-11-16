@@ -16,7 +16,7 @@ class BaseServer(ABC):
     def __init__(self, settings: Dict, host: str = '0.0.0.0', port: int = 9999):
         self.host = host
         self.port = port
-        self.request_handlers = ManageHandlers(settings, self.update_statistics).prepare_handlers()
+        self.request_handlers = ManageHandlers(settings).prepare_handlers()
         self.statistics = {'bytes_sent':0, 'bytes_recv':0, 'requests_recv':0, 'responses_sent':0}
         print(f'listening on port {self.port}')
     
@@ -99,13 +99,6 @@ class BaseServer(ABC):
         self.master_socket.close()
         print(self.statistics)
     
-    def update_statistics(self, **statistics) -> None:
-        for statistic_name, statistic_value in statistics.items():
-            if statistic_name in self.statistics:
-                self.statistics[statistic_name] += statistic_value
-            else:
-                self.statistics[statistic_name] = statistic_value
-
     @abstractmethod
     def close_client_connection(self, client_socket) -> None:
         pass

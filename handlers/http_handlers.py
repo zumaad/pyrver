@@ -104,6 +104,24 @@ class ReverseProxyHandler(HttpBaseHandler):
 
     def handle_request(self) -> bytes:
         return self.connect_and_send(self.remote_host, self.remote_port)
+
+class AsyncReverseProxyHandler(HttpBaseHandler):
+    def __init__(self, match_criteria: Dict[str, List], context: Dict, server_callback: Callable = None):
+        super().__init__(match_criteria, context, server_callback)
+        self.remote_host, self.remote_port = context['send_to']
+        
+    def connect_and_send(self, remote_host: str, remote_port: int) -> bytes:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as remote_server:
+            remote_server.settimeout(15)
+            remote_server.connect((remote_host,int(remote_port)))
+            remote_server.sendall(self.raw_http_request)
+            data = remote_server.recv(1024)
+            return data
+
+    def handle_request(self) -> bytes:
+        return self.connect_and_send(self.remote_host, self.remote_port)
+
+
         
 class LoadBalancingHandler(ReverseProxyHandler):
     def __init__(self, match_criteria: Dict[str, List], context: Dict, server_callback: Callable = None):
