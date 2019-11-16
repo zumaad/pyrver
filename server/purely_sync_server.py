@@ -42,7 +42,6 @@ class PurelySync(BaseServer):
                     self.LOGGER.info("executing reading task")
                     callback = socket_wrapper.data.reading_task.callback
                     args = socket_wrapper.data.reading_task.args
-                    
                 elif events & selectors.EVENT_WRITE and socket_wrapper.data.writing_task is not None:
                     self.LOGGER.info("executing writing task")
                     callback = socket_wrapper.data.writing.callback
@@ -52,20 +51,6 @@ class PurelySync(BaseServer):
                     callback(*args)
                 elif callback:
                     callback()
-
-                
-
-            # for socket_wrapper, events in ready_sockets:
-            #     if socket_wrapper.data.socket_type == SocketType.MASTER_SOCKET:
-            #         master_socket = socket_wrapper.fileobj
-            #         new_client_socket, addr = master_socket.accept()
-            #         self.accept_new_client(new_client_socket)
-            #     elif socket_wrapper.data.socket_type == SocketType.CLIENT_SOCKET:
-            #         client_socket = socket_wrapper.fileobj
-            #         if events & selectors.EVENT_READ:
-            #             self.handle_client(socket_wrapper)
-            #         elif events & selectors.EVENT_WRITE and socket_wrapper.data.writing_task_args is not None:
-            #             self.send_all(client_socket,socket_wrapper.data.context)
 
     def master_socket_callback(self):
         self.LOGGER.info("accepting new client")

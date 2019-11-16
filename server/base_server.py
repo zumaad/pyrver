@@ -12,6 +12,7 @@ import logging
 
 class BaseServer(ABC):
     LOGGER = logging.getLogger("server")
+    LOGGER.setLevel(logging.WARNING)
 
     def __init__(self, settings: Dict, host: str = '0.0.0.0', port: int = 9999):
         
