@@ -8,11 +8,8 @@ from server.purely_sync_server import PurelySync
 from utils.general_utils import settings_analyzer,settings_preparer
 from settings import settings_map
 
-
-logging.basicConfig(filename='server.log',
-                            filemode='a',
-                            datefmt='%H:%M:%S',
-                            level=logging.DEBUG)
+FORMAT = "%(asctime)s  %(levelname)s  %(name)s  %(funcName)s  %(message)s"
+logging.basicConfig(datefmt='%H:%M:%S',level=logging.DEBUG,format=FORMAT)
 parser = argparse.ArgumentParser()
 parser.add_argument('--settings','-s',type=int)
 parser.add_argument('--type','-t',type=str)

@@ -6,19 +6,19 @@ from handlers.handler_manager import ManageHandlers
 from utils.general_utils import HttpResponse, HttpRequest, handle_exceptions
 from utils.custom_exceptions import ClientClosingConnection
 from abc import ABC, abstractmethod
+import logging
+
 
 
 class BaseServer(ABC):
-    """
-
-    """
+    LOGGER = logging.getLogger("server")
 
     def __init__(self, settings: Dict, host: str = '0.0.0.0', port: int = 9999):
+        
         self.host = host
         self.port = port
         self.request_handlers = ManageHandlers(settings).prepare_handlers()
-        self.statistics = {'bytes_sent':0, 'bytes_recv':0, 'requests_recv':0, 'responses_sent':0}
-        print(f'listening on port {self.port}')
+        self.LOGGER.info(f'listening on port {self.port}')
     
     def init_master_socket(self):
         """ 
@@ -63,10 +63,12 @@ class BaseServer(ABC):
          """
         raw_request = None 
         raw_request = client_socket.recv(1024)
+        self.LOGGER.info(raw_request)
         #clients (such as browsers) will send an empty message when they are closing
         #their side of the connection.
-        if not raw_request: 
-           raise ClientClosingConnection("client is closing its side of the connection, clean up connection")
+        if not raw_request:
+            self.LOGGER.info("empty bytes sent!")
+            raise ClientClosingConnection("client is closing its side of the connection, clean up connection")
         else:
             self.on_received_data(client_socket, raw_request)
 
@@ -97,8 +99,7 @@ class BaseServer(ABC):
     
     def stop_loop(self) -> None:
         self.master_socket.close()
-        print(self.statistics)
-    
+        
     @abstractmethod
     def close_client_connection(self, client_socket) -> None:
         pass
