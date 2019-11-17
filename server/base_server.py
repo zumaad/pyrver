@@ -12,7 +12,7 @@ import logging
 
 class BaseServer(ABC):
     LOGGER = logging.getLogger("server")
-    LOGGER.setLevel(logging.WARNING)
+    LOGGER.setLevel(logging.DEBUG)
 
     def __init__(self, settings: Dict, host: str = '0.0.0.0', port: int = 9999):
         
@@ -86,6 +86,7 @@ class BaseServer(ABC):
         return HttpRequest.from_bytes(raw_data)
     
     def when_compatible_handler(self, client_socket, handler, raw_data):
+        self.LOGGER.info("calling send all")
         handler.raw_http_request = raw_data
         http_response = handler.handle_request()
         self.send_all(client_socket, http_response)
