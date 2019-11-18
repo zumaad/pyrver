@@ -31,11 +31,11 @@ class HttpBaseHandler:
         self.http_request = http_request
         return True
     
-    def handle_request(self) -> bytes:
+    def handle_request(self, *extra) -> Union[bytes,None]:
         return HttpResponse(body='Default http response if behaviour is not overrriden in child class :)').dump()
 
 class HealthCheckHandler(HttpBaseHandler):
-    def handle_request(self) -> bytes:
+    def handle_request(self, *extra) -> bytes:
         return HttpResponse(body="I'm Healthy!").dump()
 
 class StaticAssetHandler(HttpBaseHandler):
@@ -75,7 +75,7 @@ class StaticAssetHandler(HttpBaseHandler):
                 return self.http_request.requested_url[len(required_beginning):]
         raise Exception("somehow the requested url doesn't begin with the required beginning path")
         
-    def handle_request(self) -> bytes:
+    def handle_request(self, *extra) -> bytes:
         file_extension = '.' + self.http_request.requested_url.split('.')[-1] #probably a better way
         absolute_path = self.static_directory_path + self.remove_url_prefix() 
         content_type = self.file_extension_mime_type.get(file_extension,'text/html') #get mime type and default to text/html
@@ -98,26 +98,14 @@ class ReverseProxyHandler(HttpBaseHandler):
             data = remote_server.recv(1024)
             return data
 
-    def handle_request(self) -> bytes:
+    def handle_request(self, *extra) -> bytes:
         return self.connect_and_send(self.remote_host, self.remote_port)
 
 class AsyncReverseProxyHandler(HttpBaseHandler):
     def __init__(self, match_criteria: Dict[str, List], context: Dict, server_obj):
         super().__init__(match_criteria, context, server_obj)
         self.remote_host, self.remote_port = context['send_to']
-        
-    # def connect_and_send(self, remote_host: str, remote_port: int) -> bytes:
-    #     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as remote_server:
-    #         # remote_server.settimeout(15)
-    #         remote_server.setblocking(False)
-    #         remote_server.connect((remote_host,int(remote_port)))
-
-
-    #         self.send_all(remote_server,self.raw_http_request)
-    #         remote_server.sendall(self.raw_http_request)
-    #         data = remote_server.recv(1024)
-    #         return data
-
+  
     def reverse_proxy(self, remote_host: str, remote_port: int, client_socket) -> None:
         """ 
         I can't just use the sendall method on the socket object because it throws an error when it can't send
@@ -158,10 +146,8 @@ class AsyncReverseProxyHandler(HttpBaseHandler):
         remote_server.connect((remote_host, int(remote_port)))
         send_to_remote(remote_server, self.raw_http_request)
 
-    def handle_request(self) -> bytes:
-        return self.reverse_proxy(self.remote_host, self.remote_port)
-
-
+    def handle_request(self, *extra) -> None:
+        return self.reverse_proxy(self.remote_host, self.remote_port, extra[0])
         
 class LoadBalancingHandler(ReverseProxyHandler):
     def __init__(self, match_criteria: Dict[str, List], context: Dict, server_obj):
@@ -186,7 +172,7 @@ class LoadBalancingHandler(ReverseProxyHandler):
                 return (host, port)
         raise Exception("random number generated was not in any range")
 
-    def handle_request(self) -> bytes:
+    def handle_request(self, *extra) -> bytes:
         strategy_func = self.strategy_mapping[self.strategy]
         remote_host, remote_port = strategy_func()
         return self.connect_and_send(remote_host, remote_port)    
