@@ -23,6 +23,9 @@ class ThreadPerRequest(BaseServer):
         # So this set prevents that by only servicing client sockets not currently in the set.
         self.clients_currently_being_serviced = set() 
         self.clients_to_be_serviced = Queue()
+    
+    def get_type(self) -> str:
+        return 'threadperrequest'
 
     def init_master_socket(self) -> None:
         super().init_master_socket()

@@ -1,4 +1,4 @@
-from .http_handlers import HttpBaseHandler, StaticAssetHandler, ReverseProxyHandler, LoadBalancingHandler, HealthCheckHandler
+from .http_handlers import HttpBaseHandler, StaticAssetHandler, ReverseProxyHandler, LoadBalancingHandler, HealthCheckHandler, AsyncReverseProxyHandler
 from typing import Dict, Callable, List
 
 class ManageHandlers:
@@ -16,14 +16,22 @@ class ManageHandlers:
             'reverse_proxy':ReverseProxyHandler,
             'load_balance':LoadBalancingHandler,
             'health_check':HealthCheckHandler}
+        
+        self.sync_compatible = {
+            'serve_static':StaticAssetHandler,
+            'reverse_proxy':AsyncReverseProxyHandler,
+            'load_balance':LoadBalancingHandler,
+            'health_check':HealthCheckHandler
+        }
     
     def prepare_handlers(self) -> List[HttpBaseHandler]:
+        compatible_handlers = self.sync_compatible if self.server_obj.get_type() == 'sync' else self.implemented_handlers
         task_handlers: List[HttpBaseHandler] = []
         for task_name, task_info in self.tasks.items():
             match_criteria = task_info['match_criteria']
             needed_context = task_info['context']
-            if task_name in self.implemented_handlers:
-                handler_class = self.implemented_handlers[task_name]
+            if task_name in compatible_handlers:
+                handler_class = compatible_handlers[task_name]
                 task_handlers.append(handler_class(match_criteria, needed_context, self.server_obj))
             else:
                 raise NotImplementedError

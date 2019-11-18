@@ -4,6 +4,7 @@ import socket
 import time
 import random
 from utils.general_utils import HttpRequest, HttpResponse, Range,SocketTasks
+import selectors
 
 
 class HttpBaseHandler:
@@ -36,6 +37,7 @@ class HttpBaseHandler:
 
 class HealthCheckHandler(HttpBaseHandler):
     def handle_request(self, *extra) -> bytes:
+        # time.sleep(10)
         return HttpResponse(body="I'm Healthy!").dump()
 
 class StaticAssetHandler(HttpBaseHandler):
@@ -107,19 +109,15 @@ class AsyncReverseProxyHandler(HttpBaseHandler):
         self.remote_host, self.remote_port = context['send_to']
   
     def reverse_proxy(self, remote_host: str, remote_port: int, client_socket) -> None:
-        """ 
-        I can't just use the sendall method on the socket object because it throws an error when it can't send
-        all the bytes for whatever reason (typically other socket isn't ready for reading i guess) and you can't just catch
-        the error and try again because you have no clue how many bytes were actually written. However, using the send
-        method gives you much finer control as it returns how many bytes were written, so if all the bytes couldn't be written
-        you can truncate your message accordingly and repeat.  
-        """
+        print("in reverse proxy@!#@#!@#!@!#!@#!@#")
         def read_from_remote(remote_server):
             try:
                 data = remote_server.recv(1024)
             except BlockingIOError:
+                print("got block error on read!!!")
                 socket_task = SocketTasks()
                 socket_task.set_reading_task(read_from_remote, (remote_server,))
+                self.server_obj.socket_to_tasks[remote_server] = socket_task
                 return
             
             self.server_obj.send_all(client_socket,data)
@@ -136,7 +134,7 @@ class AsyncReverseProxyHandler(HttpBaseHandler):
                 except BlockingIOError:
                     socket_task = SocketTasks()
                     socket_task.set_writing_task(self.reverse_proxy,(response,))
-                    self.server_obj.socket_to_task[remote_server] = socket_task
+                    self.server_obj.socket_to_tasks[remote_server] = socket_task
                     return 
             #on successfull send without blocking error start reading from remote
             read_from_remote(remote_server)
@@ -144,6 +142,8 @@ class AsyncReverseProxyHandler(HttpBaseHandler):
             
         remote_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM) 
         remote_server.connect((remote_host, int(remote_port)))
+        remote_server.setblocking(False)
+        self.server_obj.client_manager.register(remote_server, selectors.EVENT_READ | selectors.EVENT_WRITE)
         send_to_remote(remote_server, self.raw_http_request)
 
     def handle_request(self, *extra) -> None:

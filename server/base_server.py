@@ -119,3 +119,7 @@ class BaseServer(ABC):
     @abstractmethod
     def accept_new_client(self, new_client) -> None:
         pass
+
+    @abstractmethod
+    def get_type(self) -> str:
+        pass

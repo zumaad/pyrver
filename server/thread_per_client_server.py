@@ -10,6 +10,9 @@ class ThreadPerClient(BaseServer):
     This implementation of the server creates a new thread for each new client and
     the client is handled entirely within that thread. 
     """
+
+    def get_type(self) -> str:
+        return 'threadperclient'
    
     def loop_forever(self):
         while True:

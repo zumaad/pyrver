@@ -14,7 +14,9 @@ class PurelySync(BaseServer):
         self.socket_to_tasks: Dict[socket.socket,SocketTasks] = {}
         self.client_manager = selectors.KqueueSelector()
         super().__init__(settings, host, port)
-        
+    
+    def get_type(self) -> str:
+        return 'sync'
         
     def init_master_socket(self) -> None:
         super().init_master_socket()
@@ -95,3 +97,4 @@ class PurelySync(BaseServer):
         del self.socket_to_tasks[client_socket]
         self.client_manager.unregister(client_socket)
         client_socket.close() 
+    
