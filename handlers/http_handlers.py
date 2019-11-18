@@ -3,15 +3,15 @@ from typing import Any, List, Dict, Union, Sequence, Tuple, Callable
 import socket
 import time
 import random
-from utils.general_utils import HttpRequest, HttpResponse, Range
+from utils.general_utils import HttpRequest, HttpResponse, Range,SocketTasks
 
 
 class HttpBaseHandler:
-    def __init__(self, match_criteria: Dict[str, List], context: Dict, server_callback: Callable = None):
+    def __init__(self, match_criteria: Dict[str, List], context: Dict, server_obj):
         self.http_request_match_criteria = match_criteria
         self.context = context
         self.raw_http_request = b''
-        self.server_callback = server_callback
+        self.server_obj = server_obj
 
     def should_handle(self, http_request: HttpRequest) -> bool:
         """ Determines whether the handler for a certain task (like serving static files) should handle
@@ -31,10 +31,6 @@ class HttpBaseHandler:
         self.http_request = http_request
         return True
     
-    def use_server_callback(self,**kwargs):
-        if self.server_callback:
-            self.server_callback(**kwargs)
-    
     def handle_request(self) -> bytes:
         return HttpResponse(body='Default http response if behaviour is not overrriden in child class :)').dump()
 
@@ -43,8 +39,8 @@ class HealthCheckHandler(HttpBaseHandler):
         return HttpResponse(body="I'm Healthy!").dump()
 
 class StaticAssetHandler(HttpBaseHandler):
-    def __init__(self, match_criteria: Dict[str, List], context: Dict, server_callback: Callable = None):
-        super().__init__(match_criteria, context, server_callback)
+    def __init__(self, match_criteria: Dict[str, List], context: Dict, server_obj):
+        super().__init__(match_criteria, context, server_obj)
         self.static_directory_path = context['staticRoot']
         self.all_files = set(pathlib.Path(self.static_directory_path).glob('**/*')) #get all files in the static directory
         self.file_extension_mime_type = {
@@ -90,8 +86,8 @@ class StaticAssetHandler(HttpBaseHandler):
             return HttpResponse(response_code=400, body=self.not_found_error_response(absolute_path)).dump()
 
 class ReverseProxyHandler(HttpBaseHandler):
-    def __init__(self, match_criteria: Dict[str, List], context: Dict, server_callback: Callable = None):
-        super().__init__(match_criteria, context, server_callback)
+    def __init__(self, match_criteria: Dict[str, List], context: Dict, server_obj):
+        super().__init__(match_criteria, context, server_obj)
         self.remote_host, self.remote_port = context['send_to']
         
     def connect_and_send(self, remote_host: str, remote_port: int) -> bytes:
@@ -106,26 +102,70 @@ class ReverseProxyHandler(HttpBaseHandler):
         return self.connect_and_send(self.remote_host, self.remote_port)
 
 class AsyncReverseProxyHandler(HttpBaseHandler):
-    def __init__(self, match_criteria: Dict[str, List], context: Dict, server_callback: Callable = None):
-        super().__init__(match_criteria, context, server_callback)
+    def __init__(self, match_criteria: Dict[str, List], context: Dict, server_obj):
+        super().__init__(match_criteria, context, server_obj)
         self.remote_host, self.remote_port = context['send_to']
         
-    def connect_and_send(self, remote_host: str, remote_port: int) -> bytes:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as remote_server:
-            remote_server.settimeout(15)
-            remote_server.connect((remote_host,int(remote_port)))
-            remote_server.sendall(self.raw_http_request)
-            data = remote_server.recv(1024)
-            return data
+    # def connect_and_send(self, remote_host: str, remote_port: int) -> bytes:
+    #     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as remote_server:
+    #         # remote_server.settimeout(15)
+    #         remote_server.setblocking(False)
+    #         remote_server.connect((remote_host,int(remote_port)))
+
+
+    #         self.send_all(remote_server,self.raw_http_request)
+    #         remote_server.sendall(self.raw_http_request)
+    #         data = remote_server.recv(1024)
+    #         return data
+
+    def reverse_proxy(self, remote_host: str, remote_port: int, client_socket) -> None:
+        """ 
+        I can't just use the sendall method on the socket object because it throws an error when it can't send
+        all the bytes for whatever reason (typically other socket isn't ready for reading i guess) and you can't just catch
+        the error and try again because you have no clue how many bytes were actually written. However, using the send
+        method gives you much finer control as it returns how many bytes were written, so if all the bytes couldn't be written
+        you can truncate your message accordingly and repeat.  
+        """
+        def read_from_remote(remote_server):
+            try:
+                data = remote_server.recv(1024)
+            except BlockingIOError:
+                socket_task = SocketTasks()
+                socket_task.set_reading_task(read_from_remote, (remote_server,))
+                return
+            
+            self.server_obj.send_all(client_socket,data)
+
+        def send_to_remote(remote_server, response):
+            BUFFER_SIZE = 1024 * 16
+            while response:
+                try:
+                    bytes_sent = remote_server.send(response[:BUFFER_SIZE])
+                    if bytes_sent < BUFFER_SIZE:
+                        response = response[bytes_sent:]
+                    else:
+                        response = response[BUFFER_SIZE:]
+                except BlockingIOError:
+                    socket_task = SocketTasks()
+                    socket_task.set_writing_task(self.reverse_proxy,(response,))
+                    self.server_obj.socket_to_task[remote_server] = socket_task
+                    return 
+            #on successfull send without blocking error start reading from remote
+            read_from_remote(remote_server)
+        
+            
+        remote_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM) 
+        remote_server.connect((remote_host, int(remote_port)))
+        send_to_remote(remote_server, self.raw_http_request)
 
     def handle_request(self) -> bytes:
-        return self.connect_and_send(self.remote_host, self.remote_port)
+        return self.reverse_proxy(self.remote_host, self.remote_port)
 
 
         
 class LoadBalancingHandler(ReverseProxyHandler):
-    def __init__(self, match_criteria: Dict[str, List], context: Dict, server_callback: Callable = None):
-        HttpBaseHandler.__init__(self, match_criteria, context, server_callback)
+    def __init__(self, match_criteria: Dict[str, List], context: Dict, server_obj):
+        HttpBaseHandler.__init__(self, match_criteria, context, server_obj)
         self.strategy = self.context['strategy']
         self.remote_servers = self.context['send_to']
         self.server_index = 0
@@ -149,5 +189,4 @@ class LoadBalancingHandler(ReverseProxyHandler):
     def handle_request(self) -> bytes:
         strategy_func = self.strategy_mapping[self.strategy]
         remote_host, remote_port = strategy_func()
-        self.use_server_callback(**{f'{remote_host}:{remote_port}':1})
         return self.connect_and_send(remote_host, remote_port)    

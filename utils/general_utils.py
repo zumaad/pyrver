@@ -5,6 +5,7 @@ import datetime
 import json
 import threading
 from .custom_exceptions import NotValidHttpFormat
+from collections import namedtuple
 
 class SocketType(Enum):
     MASTER_SOCKET = 1
@@ -166,9 +167,14 @@ def execute_in_new_thread(func, args):
     new_thread.daemon = True
     new_thread.start()
 
+class SocketTasks:
+    def __init__(self):
+        self.task = namedtuple('task', 'callback args')
+        self.reading_task = None
+        self.writing_task = None
+    
+    def set_reading_task(self, callback, args=()):
+        self.reading_task = self.task(callback, args)
 
-def send_all_no_block():
-    pass
-
-def recv_all_no_block():
-    pass
+    def set_writing_task(self,callback, args=()):
+        self.writing_task = self.task(callback, args)

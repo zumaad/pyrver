@@ -8,9 +8,9 @@ class ManageHandlers:
     can get it. 
     """
 
-    def __init__(self, settings: Dict, callback_to_attach: Callable = None):
+    def __init__(self, settings: Dict, server_obj):
         self.tasks = settings['tasks']
-        self.callback = callback_to_attach
+        self.server_obj = server_obj
         self.implemented_handlers = {
             'serve_static':StaticAssetHandler,
             'reverse_proxy':ReverseProxyHandler,
@@ -24,7 +24,7 @@ class ManageHandlers:
             needed_context = task_info['context']
             if task_name in self.implemented_handlers:
                 handler_class = self.implemented_handlers[task_name]
-                task_handlers.append(handler_class(match_criteria, needed_context, self.callback))
+                task_handlers.append(handler_class(match_criteria, needed_context, self.server_obj))
             else:
                 raise NotImplementedError
         return task_handlers

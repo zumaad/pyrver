@@ -1,7 +1,7 @@
 
 from typing import Dict
 import socket
-from handlers.http_handlers import HttpBaseHandler
+from handlers.http_handlers import HttpBaseHandler, AsyncReverseProxyHandler
 from handlers.handler_manager import ManageHandlers
 from utils.general_utils import HttpResponse, HttpRequest, handle_exceptions
 from utils.custom_exceptions import ClientClosingConnection
@@ -15,10 +15,9 @@ class BaseServer(ABC):
     LOGGER.setLevel(logging.DEBUG)
 
     def __init__(self, settings: Dict, host: str = '0.0.0.0', port: int = 9999):
-        
         self.host = host
         self.port = port
-        self.request_handlers = ManageHandlers(settings).prepare_handlers()
+        self.request_handlers = ManageHandlers(settings,self).prepare_handlers()
         self.LOGGER.info(f'listening on port {self.port}')
     
     def init_master_socket(self):
@@ -88,8 +87,11 @@ class BaseServer(ABC):
     def when_compatible_handler(self, client_socket, handler, raw_data):
         self.LOGGER.info("calling send all")
         handler.raw_http_request = raw_data
-        http_response = handler.handle_request()
-        self.send_all(client_socket, http_response)
+        if isinstance(handler, AsyncReverseProxyHandler):
+            handler.handle_request(client_socket)
+        else:
+            http_response = handler.handle_request()
+            self.send_all(client_socket, http_response)
 
     def when_no_compatible_handler(self, client_socket):
         http_error_response = HttpResponse(400, 'No handler could handle your request, check the matching criteria in settings.py').dump()

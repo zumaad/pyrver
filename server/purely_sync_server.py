@@ -5,29 +5,17 @@ from collections import namedtuple
 from handlers.handler_manager import ManageHandlers
 from .base_server import BaseServer
 from handlers.http_handlers import HttpBaseHandler
-from utils.general_utils import ClientInformation, HttpResponse, handle_exceptions, HttpRequest, SocketType, execute_in_new_thread
+from utils.general_utils import ClientInformation, HttpResponse, handle_exceptions, HttpRequest, SocketType, SocketTasks
 from utils.custom_exceptions import ClientClosingConnection, NotValidHttpFormat
 
 
-
-class SocketTasks:
-    def __init__(self):
-        self.task = namedtuple('task', 'callback args')
-        self.reading_task = None
-        self.writing_task = None
-    
-    def set_reading_task(self, callback, args=()):
-        self.reading_task = self.task(callback, args)
-
-    def set_writing_task(self,callback, args=()):
-        self.writing_task = self.task(callback, args)
-
 class PurelySync(BaseServer):
     def __init__(self, settings: Dict, host: str = '0.0.0.0', port: int = 9999):
-        super().__init__(settings, host, port)
-        self.client_manager = selectors.KqueueSelector()
         self.socket_to_tasks: Dict[socket.socket,SocketTasks] = {}
-    
+        self.client_manager = selectors.KqueueSelector()
+        super().__init__(settings, host, port)
+        
+        
     def init_master_socket(self) -> None:
         super().init_master_socket()
         socket_tasks = SocketTasks()
@@ -55,7 +43,7 @@ class PurelySync(BaseServer):
                     self.LOGGER.info("executing writing task")
                     callback = task.writing_task.callback
                     args = task.writing_task.args
-                    #this is because you so that you don't keep trying to execute the same
+                    #this is so that you don't keep trying to execute the same
                     #writing task over and over.
                     task.writing_task = None
                     
@@ -64,7 +52,6 @@ class PurelySync(BaseServer):
                 elif callback:
                     callback()
                 
-
     def master_socket_callback(self):
         self.LOGGER.info("accepting new client")
         new_client_socket, addr = self.master_socket.accept()
