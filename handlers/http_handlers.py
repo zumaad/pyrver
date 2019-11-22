@@ -37,7 +37,6 @@ class HttpBaseHandler:
 
 class HealthCheckHandler(HttpBaseHandler):
     def handle_request(self, *extra) -> bytes:
-        # time.sleep(10)
         return HttpResponse(body="I'm Healthy!").dump()
 
 class StaticAssetHandler(HttpBaseHandler):
@@ -108,13 +107,12 @@ class AsyncReverseProxyHandler(HttpBaseHandler):
         super().__init__(match_criteria, context, server_obj)
         self.remote_host, self.remote_port = context['send_to']
   
-    def reverse_proxy(self, remote_host: str, remote_port: int, client_socket) -> None:
-        print("in reverse proxy@!#@#!@#!@!#!@#!@#")
+    def connect_and_send(self, remote_host: str, remote_port: int, client_socket) -> None:
+
         def read_from_remote(remote_server):
             try:
                 data = remote_server.recv(1024)
             except BlockingIOError:
-                print("got block error on read!!!")
                 socket_task = SocketTasks()
                 socket_task.set_reading_task(read_from_remote, (remote_server,))
                 self.server_obj.socket_to_tasks[remote_server] = socket_task
@@ -133,13 +131,12 @@ class AsyncReverseProxyHandler(HttpBaseHandler):
                         response = response[BUFFER_SIZE:]
                 except BlockingIOError:
                     socket_task = SocketTasks()
-                    socket_task.set_writing_task(self.reverse_proxy,(response,))
+                    socket_task.set_writing_task(send_to_remote,(response,))
                     self.server_obj.socket_to_tasks[remote_server] = socket_task
                     return 
-            #on successfull send without blocking error start reading from remote
+            #on successful send without blocking error start reading from remote
             read_from_remote(remote_server)
         
-            
         remote_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM) 
         remote_server.connect((remote_host, int(remote_port)))
         remote_server.setblocking(False)
@@ -147,7 +144,7 @@ class AsyncReverseProxyHandler(HttpBaseHandler):
         send_to_remote(remote_server, self.raw_http_request)
 
     def handle_request(self, *extra) -> None:
-        return self.reverse_proxy(self.remote_host, self.remote_port, extra[0])
+        return self.connect_and_send(self.remote_host, self.remote_port, extra[0])
         
 class LoadBalancingHandler(ReverseProxyHandler):
     def __init__(self, match_criteria: Dict[str, List], context: Dict, server_obj):

@@ -70,32 +70,25 @@ class BaseServer(ABC):
             self.LOGGER.info("empty bytes sent!")
             raise ClientClosingConnection("client is closing its side of the connection, clean up connection")
         else:
-            self.on_received_data(client_socket, raw_request)
-
-    def on_received_data(self, client_socket, raw_data):
-        parsed_data = self.parse_raw_data(raw_data)
-        for handler in self.request_handlers:
-            if handler.should_handle(parsed_data):
-                self.when_compatible_handler(client_socket, handler, raw_data)
-                break
-        else:
-            self.when_no_compatible_handler(client_socket)
-    
+            parsed_data = self.parse_raw_data(raw_request)
+            for handler in self.request_handlers:
+                if handler.should_handle(parsed_data):
+                    self.use_handler(client_socket, handler, raw_request)
+                    break
+            else:
+                http_error_response = HttpResponse(400, 'No handler could handle your request, check the matching criteria in settings.py').dump()
+                self.send_all(client_socket, http_error_response)
+                
     def parse_raw_data(self, raw_data):
         return HttpRequest.from_bytes(raw_data)
     
-    def when_compatible_handler(self, client_socket, handler, raw_data):
-        self.LOGGER.info("calling send all")
+    def use_handler(self, client_socket, handler, raw_data):
         handler.raw_http_request = raw_data
         if isinstance(handler, AsyncReverseProxyHandler):
             handler.handle_request(client_socket)
         else:
             http_response = handler.handle_request()
             self.send_all(client_socket, http_response)
-
-    def when_no_compatible_handler(self, client_socket):
-        http_error_response = HttpResponse(400, 'No handler could handle your request, check the matching criteria in settings.py').dump()
-        self.send_all(client_socket, http_error_response)
 
     def start_loop(self) -> None:
         self.init_master_socket()
