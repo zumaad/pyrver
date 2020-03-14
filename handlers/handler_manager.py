@@ -1,4 +1,4 @@
-from .http_handlers import HttpBaseHandler, StaticAssetHandler, ReverseProxyHandler, LoadBalancingHandler, HealthCheckHandler, AsyncReverseProxyHandler
+from .http_handlers import HttpBaseHandler, StaticAssetHandler, ReverseProxyHandler, LoadBalancingHandler, HealthCheckHandler, AsyncReverseProxyHandler, AsyncLoadBalancingHandler
 from typing import Dict, Callable, List
 
 class ManageHandlers:
@@ -20,11 +20,16 @@ class ManageHandlers:
         self.sync_compatible = {
             'serve_static':StaticAssetHandler,
             'reverse_proxy':AsyncReverseProxyHandler,
-            'load_balance':LoadBalancingHandler,
+            'load_balance':AsyncLoadBalancingHandler,
             'health_check':HealthCheckHandler
         }
     
     def prepare_handlers(self) -> List[HttpBaseHandler]:
+        """
+        Picks handlers based on the settings and the server type as the async server has some 
+        different handlers and not picking all the handlers also means less iterations through handlers
+        when checking which one is supposed to handle the incoming http request.
+        """
         compatible_handlers = self.sync_compatible if self.server_obj.get_type() == 'sync' else self.implemented_handlers
         task_handlers: List[HttpBaseHandler] = []
         for task_name, task_info in self.tasks.items():

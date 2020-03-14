@@ -7,6 +7,7 @@ from .base_server import BaseServer
 from handlers.http_handlers import HttpBaseHandler
 from utils.general_utils import ClientInformation, HttpResponse, handle_exceptions, HttpRequest, SocketType, SocketTasks
 from utils.custom_exceptions import ClientClosingConnection, NotValidHttpFormat
+from event_loop.event_loop import EventLoop
 
 
 class PurelySync(BaseServer):
@@ -16,6 +17,7 @@ class PurelySync(BaseServer):
         super().__init__(settings, host, port)
     
     def get_type(self) -> str:
+        #so i don't have to import this class for type hinting in a file that this file imports.....
         return 'sync'
         
     def init_master_socket(self) -> None:
@@ -53,6 +55,32 @@ class PurelySync(BaseServer):
                     callback(*args)
                 elif callback:
                     callback()
+    
+    """
+    ideally something like this
+
+    def loop(self):
+        init master socket
+        while True:
+            master_socket = yield master_socket
+            new_client = master_socket.accept()
+    
+    def handle_client(self):
+        while true:
+            socket_to_be_handled = yield socket
+            try:
+                handle_client_request(socket_to_be_handled)
+            except (ClientClosingConnection, socket.timeout, ConnectionResetError, TimeoutError,BrokenPipeError):
+                client_socket.close() 
+    
+    def handle_client_request(socket):
+        try:
+            socket.read()
+        except blocking io error:
+            
+
+
+    """
                 
     def master_socket_callback(self):
         self.LOGGER.info("accepting new client")

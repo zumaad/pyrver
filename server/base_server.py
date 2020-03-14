@@ -70,7 +70,7 @@ class BaseServer(ABC):
             self.LOGGER.info("empty bytes sent!")
             raise ClientClosingConnection("client is closing its side of the connection, clean up connection")
         else:
-            parsed_data = self.parse_raw_data(raw_request)
+            parsed_data = HttpRequest.from_bytes(raw_request)
             for handler in self.request_handlers:
                 if handler.should_handle(parsed_data):
                     self.use_handler(client_socket, handler, raw_request)
@@ -79,9 +79,6 @@ class BaseServer(ABC):
                 http_error_response = HttpResponse(400, 'No handler could handle your request, check the matching criteria in settings.py').dump()
                 self.send_all(client_socket, http_error_response)
                 
-    def parse_raw_data(self, raw_data):
-        return HttpRequest.from_bytes(raw_data)
-    
     def use_handler(self, client_socket, handler, raw_data):
         handler.raw_http_request = raw_data
         if isinstance(handler, AsyncReverseProxyHandler):

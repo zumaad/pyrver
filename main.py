@@ -16,7 +16,6 @@ parser.add_argument('--type','-t',type=str)
 parser.add_argument('--port','-p',type=int,default=9999)
 args = parser.parse_args() 
 
-
 def main() -> None:
     type_to_server_mapping = {
         '1':ThreadPerClient,

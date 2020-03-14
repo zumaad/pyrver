@@ -3,7 +3,7 @@ from typing import Any, List, Dict, Union, Sequence, Tuple, Callable
 import socket
 import time
 import random
-from utils.general_utils import HttpRequest, HttpResponse, Range,SocketTasks
+from utils.general_utils import HttpRequest, HttpResponse, Range, SocketTasks
 import selectors
 
 
@@ -15,8 +15,11 @@ class HttpBaseHandler:
         self.server_obj = server_obj
 
     def should_handle(self, http_request: HttpRequest) -> bool:
-        """ Determines whether the handler for a certain task (like serving static files) should handle
-            the given request. For example in your settings.json file you """
+        """ 
+        Determines whether the handler for a certain task (like serving static files) should handle
+        the given request. It does this by looking at the attributes of the http request like the 
+        its headers, the request url, etc.
+        """
         for target_http_request_attribute, required_attribute_values in self.http_request_match_criteria.items():
             actual_request_attribute_value = http_request[target_http_request_attribute]
             
@@ -36,7 +39,7 @@ class HttpBaseHandler:
         return HttpResponse(body='Default http response if behaviour is not overrriden in child class :)').dump()
 
 class HealthCheckHandler(HttpBaseHandler):
-    def handle_request(self, *extra) -> bytes:
+    def handle_request(self, *extra) -> bytes:  
         return HttpResponse(body="I'm Healthy!").dump()
 
 class StaticAssetHandler(HttpBaseHandler):
@@ -84,7 +87,7 @@ class StaticAssetHandler(HttpBaseHandler):
             static_file_contents = open(absolute_path,'rb').read()
             return HttpResponse(body=static_file_contents, additional_headers={'Content-Type':content_type}).dump()
         else:
-            return HttpResponse(response_code=400, body=self.not_found_error_response(absolute_path)).dump()
+            return HttpResponse(response_code=404, body=self.not_found_error_response(absolute_path)).dump()
 
 class ReverseProxyHandler(HttpBaseHandler):
     def __init__(self, match_criteria: Dict[str, List], context: Dict, server_obj):
@@ -101,6 +104,35 @@ class ReverseProxyHandler(HttpBaseHandler):
 
     def handle_request(self, *extra) -> bytes:
         return self.connect_and_send(self.remote_host, self.remote_port)
+
+class LoadBalancingHandler(ReverseProxyHandler):
+    def __init__(self, match_criteria: Dict[str, List], context: Dict, server_obj):
+        HttpBaseHandler.__init__(self, match_criteria, context, server_obj)
+        self.strategy = self.context['strategy']
+        self.remote_servers = self.context['send_to']
+        self.server_index = 0
+        self.strategy_mapping = {
+            "round_robin":self.round_robin_strategy,
+            "weighted":self.weighted_strategy
+        }
+        
+    def round_robin_strategy(self) -> Tuple[str,int]:
+        server_to_send_to = self.remote_servers[self.server_index % len(self.remote_servers)]
+        self.server_index +=1
+        return server_to_send_to
+    
+    def weighted_strategy(self) -> Tuple[str,int]:
+        random_num = random.random()
+        for host, port, weight_range in self.remote_servers:
+            if random_num in weight_range:
+                return (host, port)
+        raise Exception("random number generated was not in any range")
+
+    def handle_request(self, *extra) -> bytes:
+        strategy_func = self.strategy_mapping[self.strategy]
+        remote_host, remote_port = strategy_func()
+        return self.connect_and_send(remote_host, remote_port)    
+
 
 class AsyncReverseProxyHandler(HttpBaseHandler):
     def __init__(self, match_criteria: Dict[str, List], context: Dict, server_obj):
@@ -145,31 +177,6 @@ class AsyncReverseProxyHandler(HttpBaseHandler):
 
     def handle_request(self, *extra) -> None:
         return self.connect_and_send(self.remote_host, self.remote_port, extra[0])
-        
-class LoadBalancingHandler(ReverseProxyHandler):
-    def __init__(self, match_criteria: Dict[str, List], context: Dict, server_obj):
-        HttpBaseHandler.__init__(self, match_criteria, context, server_obj)
-        self.strategy = self.context['strategy']
-        self.remote_servers = self.context['send_to']
-        self.server_index = 0
-        self.strategy_mapping = {
-            "round_robin":self.round_robin_strategy,
-            "weighted":self.weighted_strategy
-        }
-        
-    def round_robin_strategy(self) -> Tuple[str,int]:
-        server_to_send_to = self.remote_servers[self.server_index % len(self.remote_servers)]
-        self.server_index +=1
-        return server_to_send_to
-    
-    def weighted_strategy(self) -> Tuple[str,int]:
-        random_num = random.random()
-        for host, port, weight_range in self.remote_servers:
-            if random_num in weight_range:
-                return (host, port)
-        raise Exception("random number generated was not in any range")
 
-    def handle_request(self, *extra) -> bytes:
-        strategy_func = self.strategy_mapping[self.strategy]
-        remote_host, remote_port = strategy_func()
-        return self.connect_and_send(remote_host, remote_port)    
+class AsyncLoadBalancingHandler(AsyncReverseProxyHandler):
+    pass
