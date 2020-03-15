@@ -36,7 +36,7 @@ def main() -> None:
     try:
         server.start_loop()
     except KeyboardInterrupt:
-        print("Stopping server :(")
+        print("\nStopping server :(")
         server.stop_loop()
 
 if __name__ == "__main__":

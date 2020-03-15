@@ -11,8 +11,9 @@ import logging
 
 
 class BaseServer(ABC):
-    LOGGER = logging.getLogger("server")
+    LOGGER = logging.getLogger("base server")
     LOGGER.setLevel(logging.DEBUG)
+
 
     def __init__(self, settings: Dict, host: str = '0.0.0.0', port: int = 9999):
         self.host = host
@@ -49,18 +50,12 @@ class BaseServer(ABC):
             except BlockingIOError: 
                 continue
 
-    def handle_client_request(self, client_socket) -> None:
+    def handle_client_request(self, client_socket) -> bytes:
         """
         every server should have a way to handle a client's request, there are generally two possibilities:
         1. the client sends an empty message (when they disconnect)
-        2. the client sends some data that should be parsed.
-
-        the reason on_received_data is is its on method instead of bieng stuck in here as its pretty small is
-        because i can imagine that diff server implementation want to handle the received data differently. This way,
-        if thats the case, they can still inherit handle_client_request and override on_received_data instead of having
-        to override handle_client_request and have to reimplement a lot more
-        
-         """
+        2. the client sends some data that should be parsed.    
+        """
         raw_request = None 
         raw_request = client_socket.recv(1024)
         self.LOGGER.info(raw_request)
@@ -73,19 +68,19 @@ class BaseServer(ABC):
             parsed_data = HttpRequest.from_bytes(raw_request)
             for handler in self.request_handlers:
                 if handler.should_handle(parsed_data):
-                    self.use_handler(client_socket, handler, raw_request)
-                    break
+                    self.LOGGER.info(f"handler is {handler}")
+                    http_response = self.use_handler(client_socket, handler, raw_request)
+                    self.LOGGER.info(http_response)
+                    return http_response
             else:
                 http_error_response = HttpResponse(400, 'No handler could handle your request, check the matching criteria in settings.py').dump()
-                self.send_all(client_socket, http_error_response)
-                
-    def use_handler(self, client_socket, handler, raw_data):
+                return http_error_response
+    
+    def use_handler(self, client_socket, handler, raw_data) -> bytes:
         handler.raw_http_request = raw_data
-        if isinstance(handler, AsyncReverseProxyHandler):
-            handler.handle_request(client_socket)
-        else:
-            http_response = handler.handle_request()
-            self.send_all(client_socket, http_response)
+        http_response = handler.handle_request()
+        return http_response
+        
 
     def start_loop(self) -> None:
         self.init_master_socket()

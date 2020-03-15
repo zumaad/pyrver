@@ -18,17 +18,18 @@ class ThreadPerClient(BaseServer):
         while True:
             new_client, addr = self.master_socket.accept()
             self.accept_new_client(new_client)
+            execute_in_new_thread(self.handle_client, (new_client,))
 
     def accept_new_client(self, new_client):
         #if client is idle for this long, an error should be raised and should signal closing
         #the connection
         new_client.settimeout(3) 
-        execute_in_new_thread(self.handle_client, (new_client,))
         
     def handle_client(self, client):
         while True:
             try:
-                self.handle_client_request(client)
+                http_response = self.handle_client_request(client)
+                self.send_all(client, http_response)
             except (ClientClosingConnection, NotValidHttpFormat, socket.timeout, ConnectionResetError, TimeoutError, BrokenPipeError):
                 self.close_client_connection(client)
                 break

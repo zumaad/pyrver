@@ -20,7 +20,7 @@ class ManageHandlers:
         self.sync_compatible = {
             'serve_static':StaticAssetHandler,
             'reverse_proxy':AsyncReverseProxyHandler,
-            'load_balance':AsyncLoadBalancingHandler,
+            'load_balance':LoadBalancingHandler,
             'health_check':HealthCheckHandler
         }
     

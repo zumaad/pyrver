@@ -58,7 +58,8 @@ class ThreadPerRequest(BaseServer):
         while True:
             client_socket = self.clients_to_be_serviced.get()
             try:
-                self.handle_client_request(client_socket)
+                http_response = self.handle_client_request(client_socket)
+                self.send_all(client_socket, http_response)
             except (ClientClosingConnection, socket.timeout, ConnectionResetError, TimeoutError, BrokenPipeError):
                 self.close_client_connection(client_socket)
     

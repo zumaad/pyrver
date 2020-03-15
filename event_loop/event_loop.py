@@ -67,6 +67,12 @@ class EventLoop:
         
     def register_resource(self, resource, event: int):
         self.resource_selector.register(resource, event)
+    
+    def deregister_resource(self, resource) -> None:
+        for task in self.task_to_coroutine:
+            if task.resource == resource:
+                del self.task_to_coroutine[task]
+                break
 
     def run_coroutine(self, func: Callable, *func_args):
         coroutine = func(*func_args)
@@ -121,3 +127,6 @@ class EventLoop:
                 break
 
             self.ready_resources = set(resource_wrapper.fileobj for resource_wrapper, event in self.resource_selector.select(-1))
+
+
+
