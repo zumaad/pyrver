@@ -154,49 +154,6 @@ class AsyncReverseProxyHandler(ReverseProxyHandler):
     def handle_request(self, http_request: HttpRequest) -> Generator:
         http_response = yield from self.connect_and_send(self.remote_host, self.remote_port, http_request)
         return http_response
-    
-    # def __init__(self, match_criteria: Dict[str, List], context: Dict, server_obj):
-    #     super().__init__(match_criteria, context, server_obj)
-    #     self.remote_host, self.remote_port = context['send_to']
-  
-    # def connect_and_send(self, remote_host: str, remote_port: int, client_socket) -> None:
-
-    #     def read_from_remote(remote_server):
-    #         try:
-    #             data = remote_server.recv(1024)
-    #         except BlockingIOError:
-    #             socket_task = SocketTasks()
-    #             socket_task.set_reading_task(read_from_remote, (remote_server,))
-    #             self.server_obj.socket_to_tasks[remote_server] = socket_task
-    #             return
-            
-    #         self.server_obj.send_all(client_socket,data)
-
-    #     def send_to_remote(remote_server, response):
-    #         BUFFER_SIZE = 1024 * 16
-    #         while response:
-    #             try:
-    #                 bytes_sent = remote_server.send(response[:BUFFER_SIZE])
-    #                 if bytes_sent < BUFFER_SIZE:
-    #                     response = response[bytes_sent:]
-    #                 else:
-    #                     response = response[BUFFER_SIZE:]
-    #             except BlockingIOError:
-    #                 socket_task = SocketTasks()
-    #                 socket_task.set_writing_task(send_to_remote,(response,))
-    #                 self.server_obj.socket_to_tasks[remote_server] = socket_task
-    #                 return 
-    #         #on successful send without blocking error start reading from remote
-    #         read_from_remote(remote_server)
-        
-    #     remote_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM) 
-    #     remote_server.connect((remote_host, int(remote_port)))
-    #     remote_server.setblocking(False)
-    #     self.server_obj.client_manager.register(remote_server, selectors.EVENT_READ | selectors.EVENT_WRITE)
-    #     send_to_remote(remote_server, self.http_request.raw_http_request)
-
-    # def handle_request(self, *extra) -> None:
-    #     return self.connect_and_send(self.remote_host, self.remote_port, extra[0])
 
 class AsyncLoadBalancingHandler(AsyncReverseProxyHandler, LoadBalancingHandler):
     
