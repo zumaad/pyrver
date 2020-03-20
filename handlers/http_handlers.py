@@ -23,7 +23,7 @@ class HttpBaseHandler(ABC):
         """
         for target_http_request_attribute, required_attribute_values in self.http_request_match_criteria.items():
             actual_request_attribute_value = http_request[target_http_request_attribute]
-            print(actual_request_attribute_value, required_attribute_values)
+            
             
             if target_http_request_attribute == 'url':
                 #url matching is different because you are not checking for the simple existance of the

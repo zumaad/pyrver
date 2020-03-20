@@ -42,7 +42,6 @@ class PurelySync(BaseServer):
             yield ResourceTask(client_socket, 'readable')
             try:
                 raw_client_request = read_all(client_socket)
-                print(raw_client_request)
                 http_request = HttpRequest.from_bytes(raw_client_request)
                 http_response = yield from self.handle_client_request(http_request)
                 yield from async_send_all(client_socket, http_response.dump())
