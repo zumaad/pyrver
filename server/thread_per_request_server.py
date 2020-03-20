@@ -4,7 +4,7 @@ import selectors
 from handlers.handler_manager import ManageHandlers
 from .base_server import BaseServer
 from handlers.http_handlers import HttpBaseHandler
-from utils.general_utils import ClientInformation, HttpResponse, handle_exceptions, HttpRequest, SocketType, execute_in_new_thread
+from utils.general_utils import ClientInformation, HttpResponse, handle_exceptions, HttpRequest, SocketType, execute_in_new_thread, read_all, send_all
 from utils.custom_exceptions import ClientClosingConnection, NotValidHttpFormat
 from queue import Queue
 import threading
@@ -58,8 +58,10 @@ class ThreadPerRequest(BaseServer):
         while True:
             client_socket = self.clients_to_be_serviced.get()
             try:
-                http_response = self.handle_client_request(client_socket)
-                self.send_all(client_socket, http_response)
+                raw_client_request = read_all(client_socket)
+                http_request = HttpRequest.from_bytes(raw_client_request)
+                http_response = self.handle_client_request(http_request)
+                send_all(client_socket, http_response.dump())
             except (ClientClosingConnection, socket.timeout, ConnectionResetError, TimeoutError, BrokenPipeError):
                 self.close_client_connection(client_socket)
     

@@ -1,17 +1,18 @@
 import pathlib
-from typing import Any, List, Dict, Union, Sequence, Tuple, Callable
+from typing import Any, List, Dict, Union, Sequence, Tuple, Callable, Generator
 import socket
 import time
 import random
-from utils.general_utils import HttpRequest, HttpResponse, Range, SocketTasks
+from utils.general_utils import HttpRequest, HttpResponse, Range, SocketTasks, read_all, send_all, async_send_all
 import selectors
+from abc import ABC, abstractmethod
+from event_loop.event_loop import ResourceTask
 
 
-class HttpBaseHandler:
+class HttpBaseHandler(ABC):
     def __init__(self, match_criteria: Dict[str, List], context: Dict, server_obj):
         self.http_request_match_criteria = match_criteria
         self.context = context
-        self.raw_http_request = b''
         self.server_obj = server_obj
 
     def should_handle(self, http_request: HttpRequest) -> bool:
@@ -22,6 +23,7 @@ class HttpBaseHandler:
         """
         for target_http_request_attribute, required_attribute_values in self.http_request_match_criteria.items():
             actual_request_attribute_value = http_request[target_http_request_attribute]
+            print(actual_request_attribute_value, required_attribute_values)
             
             if target_http_request_attribute == 'url':
                 #url matching is different because you are not checking for the simple existance of the
@@ -31,16 +33,15 @@ class HttpBaseHandler:
             else:
                 if actual_request_attribute_value not in required_attribute_values:
                     return False
-    
-        self.http_request = http_request
         return True
     
-    def handle_request(self, *extra) -> Union[bytes,None]:
-        return HttpResponse(body='Default http response if behaviour is not overrriden in child class :)').dump()
+    @abstractmethod
+    def handle_request(self, http_request: HttpRequest) -> HttpResponse:
+        pass
 
 class HealthCheckHandler(HttpBaseHandler):
-    def handle_request(self, *extra) -> bytes:  
-        return HttpResponse(body="I'm Healthy!").dump()
+    def handle_request(self, http_request: HttpRequest) -> HttpResponse:  
+        return HttpResponse(body="I'm Healthy!")
 
 class StaticAssetHandler(HttpBaseHandler):
     def __init__(self, match_criteria: Dict[str, List], context: Dict, server_obj):
@@ -73,37 +74,38 @@ class StaticAssetHandler(HttpBaseHandler):
                 f'in your settings.json file) + the relative path to your resource starting from the static_root (defined in\n' 
                 f'settings.py). </pre>')
 
-    def remove_url_prefix(self) -> str:
+    def remove_url_prefix(self, http_request: HttpRequest) -> str:
         for required_beginning in self.http_request_match_criteria['url']:
-            if self.http_request.requested_url.startswith(required_beginning):
-                return self.http_request.requested_url[len(required_beginning):]
+            if http_request.requested_url.startswith(required_beginning):
+                return http_request.requested_url[len(required_beginning):]
         raise Exception("somehow the requested url doesn't begin with the required beginning path")
         
-    def handle_request(self, *extra) -> bytes:
-        file_extension = '.' + self.http_request.requested_url.split('.')[-1] #probably a better way
-        absolute_path = self.static_directory_path + self.remove_url_prefix() 
+    def handle_request(self, http_request: HttpRequest) -> HttpResponse:
+        file_extension = '.' + http_request.requested_url.split('.')[-1] #probably a better way
+        absolute_path = self.static_directory_path + self.remove_url_prefix(http_request) 
         content_type = self.file_extension_mime_type.get(file_extension,'text/html') #get mime type and default to text/html
         if pathlib.Path(absolute_path) in self.all_files:
             static_file_contents = open(absolute_path,'rb').read()
-            return HttpResponse(body=static_file_contents, additional_headers={'Content-Type':content_type}).dump()
+            return HttpResponse(body=static_file_contents, additional_headers={'Content-Type':content_type})
         else:
-            return HttpResponse(response_code=404, body=self.not_found_error_response(absolute_path)).dump()
+            return HttpResponse(response_code=404, body=self.not_found_error_response(absolute_path))
 
 class ReverseProxyHandler(HttpBaseHandler):
     def __init__(self, match_criteria: Dict[str, List], context: Dict, server_obj):
         super().__init__(match_criteria, context, server_obj)
         self.remote_host, self.remote_port = context['send_to']
         
-    def connect_and_send(self, remote_host: str, remote_port: int) -> bytes:
+    def connect_and_send(self, remote_host: str, remote_port: int, http_request: HttpRequest) -> HttpResponse:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as remote_server:
             remote_server.settimeout(15)
             remote_server.connect((remote_host,int(remote_port)))
-            remote_server.sendall(self.raw_http_request)
+            remote_server.sendall(http_request.raw_http_request)
             data = remote_server.recv(1024)
-            return data
+            http_response = HttpResponse.from_bytes(data)
+            return http_response
 
-    def handle_request(self, *extra) -> bytes:
-        return self.connect_and_send(self.remote_host, self.remote_port)
+    def handle_request(self, http_request: HttpRequest) -> HttpResponse:
+        return self.connect_and_send(self.remote_host, self.remote_port, http_request)
 
 class LoadBalancingHandler(ReverseProxyHandler):
     def __init__(self, match_criteria: Dict[str, List], context: Dict, server_obj):
@@ -128,55 +130,82 @@ class LoadBalancingHandler(ReverseProxyHandler):
                 return (host, port)
         raise Exception("random number generated was not in any range")
 
-    def handle_request(self, *extra) -> bytes:
+    def handle_request(self, http_request: HttpRequest) -> HttpResponse:
         strategy_func = self.strategy_mapping[self.strategy]
         remote_host, remote_port = strategy_func()
-        return self.connect_and_send(remote_host, remote_port)    
+        return self.connect_and_send(remote_host, remote_port, http_request)    
 
 
-class AsyncReverseProxyHandler(HttpBaseHandler):
+class AsyncReverseProxyHandler(ReverseProxyHandler):
+
+    def connect_and_send(self, remote_host: str, remote_port: int, http_request: HttpRequest) -> Generator:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as remote_server:
+            remote_server.setblocking(False)
+            try:
+                remote_server.connect((remote_host,int(remote_port)))
+            except BlockingIOError:
+                yield ResourceTask(remote_server,'writable')
+            yield from async_send_all(remote_server, http_request.raw_http_request)
+            yield ResourceTask(remote_server, 'readable')
+            data = read_all(remote_server)
+            http_response = HttpResponse.from_bytes(data)
+            return http_response
+
+    def handle_request(self, http_request: HttpRequest) -> Generator:
+        http_response = yield from self.connect_and_send(self.remote_host, self.remote_port, http_request)
+        return http_response
+    
+    # def __init__(self, match_criteria: Dict[str, List], context: Dict, server_obj):
+    #     super().__init__(match_criteria, context, server_obj)
+    #     self.remote_host, self.remote_port = context['send_to']
+  
+    # def connect_and_send(self, remote_host: str, remote_port: int, client_socket) -> None:
+
+    #     def read_from_remote(remote_server):
+    #         try:
+    #             data = remote_server.recv(1024)
+    #         except BlockingIOError:
+    #             socket_task = SocketTasks()
+    #             socket_task.set_reading_task(read_from_remote, (remote_server,))
+    #             self.server_obj.socket_to_tasks[remote_server] = socket_task
+    #             return
+            
+    #         self.server_obj.send_all(client_socket,data)
+
+    #     def send_to_remote(remote_server, response):
+    #         BUFFER_SIZE = 1024 * 16
+    #         while response:
+    #             try:
+    #                 bytes_sent = remote_server.send(response[:BUFFER_SIZE])
+    #                 if bytes_sent < BUFFER_SIZE:
+    #                     response = response[bytes_sent:]
+    #                 else:
+    #                     response = response[BUFFER_SIZE:]
+    #             except BlockingIOError:
+    #                 socket_task = SocketTasks()
+    #                 socket_task.set_writing_task(send_to_remote,(response,))
+    #                 self.server_obj.socket_to_tasks[remote_server] = socket_task
+    #                 return 
+    #         #on successful send without blocking error start reading from remote
+    #         read_from_remote(remote_server)
+        
+    #     remote_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM) 
+    #     remote_server.connect((remote_host, int(remote_port)))
+    #     remote_server.setblocking(False)
+    #     self.server_obj.client_manager.register(remote_server, selectors.EVENT_READ | selectors.EVENT_WRITE)
+    #     send_to_remote(remote_server, self.http_request.raw_http_request)
+
+    # def handle_request(self, *extra) -> None:
+    #     return self.connect_and_send(self.remote_host, self.remote_port, extra[0])
+
+class AsyncLoadBalancingHandler(AsyncReverseProxyHandler, LoadBalancingHandler):
+    
     def __init__(self, match_criteria: Dict[str, List], context: Dict, server_obj):
         super().__init__(match_criteria, context, server_obj)
-        self.remote_host, self.remote_port = context['send_to']
-  
-    def connect_and_send(self, remote_host: str, remote_port: int, client_socket) -> None:
-
-        def read_from_remote(remote_server):
-            try:
-                data = remote_server.recv(1024)
-            except BlockingIOError:
-                socket_task = SocketTasks()
-                socket_task.set_reading_task(read_from_remote, (remote_server,))
-                self.server_obj.socket_to_tasks[remote_server] = socket_task
-                return
-            
-            self.server_obj.send_all(client_socket,data)
-
-        def send_to_remote(remote_server, response):
-            BUFFER_SIZE = 1024 * 16
-            while response:
-                try:
-                    bytes_sent = remote_server.send(response[:BUFFER_SIZE])
-                    if bytes_sent < BUFFER_SIZE:
-                        response = response[bytes_sent:]
-                    else:
-                        response = response[BUFFER_SIZE:]
-                except BlockingIOError:
-                    socket_task = SocketTasks()
-                    socket_task.set_writing_task(send_to_remote,(response,))
-                    self.server_obj.socket_to_tasks[remote_server] = socket_task
-                    return 
-            #on successful send without blocking error start reading from remote
-            read_from_remote(remote_server)
-        
-        remote_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM) 
-        remote_server.connect((remote_host, int(remote_port)))
-        remote_server.setblocking(False)
-        self.server_obj.client_manager.register(remote_server, selectors.EVENT_READ | selectors.EVENT_WRITE)
-        send_to_remote(remote_server, self.raw_http_request)
-
-    def handle_request(self, *extra) -> None:
-        return self.connect_and_send(self.remote_host, self.remote_port, extra[0])
-
-class AsyncLoadBalancingHandler(AsyncReverseProxyHandler):
-    pass
+        LoadBalancingHandler.__init__(self, match_criteria, context, server_obj)
+    
+    def handle_request(self, http_request: HttpRequest) -> Generator:
+        strategy_func = self.strategy_mapping[self.strategy]
+        remote_host, remote_port = strategy_func()
+        http_response = yield from self.connect_and_send(remote_host, remote_port, http_request)   
+        return http_response

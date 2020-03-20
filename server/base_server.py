@@ -31,6 +31,27 @@ class BaseServer(ABC):
         master_socket.listen()
         self.master_socket = master_socket
         
+    def handle_client_request(self, http_request: HttpRequest) -> HttpResponse:
+        """
+        every server should have a way to handle a client's request, there are generally two possibilities:
+        1. the client sends an empty message (when they disconnect)
+        2. the client sends some data that should be parsed.    
+        """
+        for handler in self.request_handlers:
+            if handler.should_handle(http_request):
+                http_response = handler.handle_request(http_request)
+                return http_response
+                
+        http_error_response = HttpResponse(400, 'No handler could handle your request, check the matching criteria in settings.py')
+        return http_error_response
+        
+    def start_loop(self) -> None:
+        self.init_master_socket()
+        self.loop_forever()
+    
+    def stop_loop(self) -> None:
+        self.master_socket.close()
+    
     def send_all(self, client_socket, response: bytes) -> None:
         """ 
         I can't just use the sendall method on the socket object because it throws an error when it can't send
@@ -41,58 +62,20 @@ class BaseServer(ABC):
         """
         BUFFER_SIZE = 1024 * 16
         while response:
-            try:
-                bytes_sent = client_socket.send(response[:BUFFER_SIZE])
-                if bytes_sent < BUFFER_SIZE:
-                    response = response[bytes_sent:]
-                else:
-                    response = response[BUFFER_SIZE:]
-            except BlockingIOError: 
-                continue
-
-    def handle_client_request(self, client_socket) -> bytes:
-        """
-        every server should have a way to handle a client's request, there are generally two possibilities:
-        1. the client sends an empty message (when they disconnect)
-        2. the client sends some data that should be parsed.    
-        """
-        raw_request = None 
-        raw_request = client_socket.recv(1024)
-        self.LOGGER.info(raw_request)
-        #clients (such as browsers) will send an empty message when they are closing
-        #their side of the connection.
-        if not raw_request:
-            self.LOGGER.info("empty bytes sent!")
+            bytes_sent = client_socket.send(response[:BUFFER_SIZE])
+            response = response[bytes_sent:]
+            
+    def read_all(self, client_socket) -> bytes:
+        #will change this later, keeping it simple for now
+        data = client_socket.recv(1024)
+        if not data:
             raise ClientClosingConnection("client is closing its side of the connection, clean up connection")
-        else:
-            parsed_data = HttpRequest.from_bytes(raw_request)
-            for handler in self.request_handlers:
-                if handler.should_handle(parsed_data):
-                    self.LOGGER.info(f"handler is {handler}")
-                    http_response = self.use_handler(client_socket, handler, raw_request)
-                    self.LOGGER.info(http_response)
-                    return http_response
-            else:
-                http_error_response = HttpResponse(400, 'No handler could handle your request, check the matching criteria in settings.py').dump()
-                return http_error_response
+        return data
     
-    def use_handler(self, client_socket, handler, raw_data) -> bytes:
-        handler.raw_http_request = raw_data
-        http_response = handler.handle_request()
-        return http_response
-        
-
-    def start_loop(self) -> None:
-        self.init_master_socket()
-        self.loop_forever()
-    
-    def stop_loop(self) -> None:
-        self.master_socket.close()
-        
-    @abstractmethod
     def close_client_connection(self, client_socket) -> None:
-        pass
-    
+        self.LOGGER.info('closing client connection')
+        client_socket.close()
+        
     @abstractmethod
     def loop_forever(self) -> None:
         pass

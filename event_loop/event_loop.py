@@ -100,7 +100,6 @@ class EventLoop:
     def get_new_task(self, coroutine: Generator, task):
         if isinstance(task, ResourceTask):
             self.resource_selector.unregister(task.resource)
-
         try:
             new_task = coroutine.send(True)
             return new_task
@@ -112,6 +111,7 @@ class EventLoop:
         This is the meat of the event loop. 
         """
         self.ready_resources = set(self.resource_selector.select(-1))
+        
         while True:
             for task, coroutine in list(self.task_to_coroutine.items()):
                 if self.is_complete(task):
@@ -121,12 +121,9 @@ class EventLoop:
                     if new_task:
                         self.task_to_coroutine[new_task] = coroutine
                         if isinstance(task, ResourceTask):
-                            self.register_resource(task.resource, task.event)
+                            self.register_resource(new_task.resource, new_task.event)
             if not self.task_to_coroutine:
                 print("all tasks are over, exiting the loop")
                 break
 
             self.ready_resources = set(resource_wrapper.fileobj for resource_wrapper, event in self.resource_selector.select(-1))
-
-
-

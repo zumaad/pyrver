@@ -23,7 +23,7 @@ settings = {
 
         "reverse_proxy": {
             "match_criteria": {
-                "host":["testingserver3.com"]
+                "url": ["/reverseproxy/"]
                 },
             "context": {
                 'send_to':('localhost',5000)
@@ -41,16 +41,16 @@ settings = {
                 }
         },
 
-        "load_balance": {
-            "match_criteria": {
-                "url":["/testweighted/"]
-            },
-            "context": {
-                "send_to":
-                    [('localhost', 4000, 1/4), ('localhost', 4500, 1/4), ('localhost', 5000, 2/4)],
-                "strategy":"weighted"
-            }
-        },
+        # "load_balance": {
+        #     "match_criteria": {
+        #         "url":["/testweighted/"]
+        #     },
+        #     "context": {
+        #         "send_to":
+        #             [('localhost', 4000, 1/4), ('localhost', 4500, 1/4), ('localhost', 5000, 2/4)],
+        #         "strategy":"weighted"
+        #     }
+        # },
 
         "health_check": {
             "match_criteria": {"url":['/health/']},
