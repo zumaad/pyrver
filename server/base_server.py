@@ -52,26 +52,6 @@ class BaseServer(ABC):
     def stop_loop(self) -> None:
         self.master_socket.close()
     
-    def send_all(self, client_socket, response: bytes) -> None:
-        """ 
-        I can't just use the sendall method on the socket object because it throws an error when it can't send
-        all the bytes for whatever reason (typically other socket isn't ready for reading i guess) and you can't just catch
-        the error and try again because you have no clue how many bytes were actually written. However, using the send
-        method gives you much finer control as it returns how many bytes were written, so if all the bytes couldn't be written
-        you can truncate your message accordingly and repeat.  
-        """
-        BUFFER_SIZE = 1024 * 16
-        while response:
-            bytes_sent = client_socket.send(response[:BUFFER_SIZE])
-            response = response[bytes_sent:]
-            
-    def read_all(self, client_socket) -> bytes:
-        #will change this later, keeping it simple for now
-        data = client_socket.recv(1024)
-        if not data:
-            raise ClientClosingConnection("client is closing its side of the connection, clean up connection")
-        return data
-    
     def close_client_connection(self, client_socket) -> None:
         self.LOGGER.info('closing client connection')
         client_socket.close()
